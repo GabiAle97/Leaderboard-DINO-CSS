@@ -11,6 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="auth.css" />
+    <link rel="stylesheet" href="notifications.css" />
   </head>
   <body>
     <div class="scanlines" aria-hidden="true"></div>
@@ -29,6 +30,7 @@
         <div class="account-box" id="account-box" hidden>
           <span id="account-name"></span>
           <button type="button" class="account-action" id="my-runs-button">MIS RUNS</button>
+          <button type="button" class="account-action" id="notifications-button">AVISOS <span id="notification-count" hidden>0</span></button>
           <button type="button" class="account-action" id="sign-out-button">SALIR</button>
         </div>
       </div>
@@ -89,6 +91,11 @@
       <section class="my-runs-section section-wrap" id="my-runs-section" hidden>
         <div class="section-heading"><div><div class="eyebrow"><i></i> TU PERFIL</div><h2>MIS <span>RUNS</span></h2></div></div>
         <div id="my-runs-list" class="my-runs-list"></div>
+      </section>
+
+      <section class="notifications-section section-wrap" id="notifications-section" hidden>
+        <div class="section-heading"><div><div class="eyebrow"><i></i> CENTRO DE ACTIVIDAD</div><h2>TUS <span>NOTIFICACIONES</span></h2></div></div>
+        <div id="notifications-list" class="notifications-list" aria-live="polite"></div>
       </section>
 
       <section class="rules-section section-wrap" id="rules">

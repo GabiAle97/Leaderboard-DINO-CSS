@@ -1,6 +1,7 @@
 const CONFIG = window.RUN_ARCHIVE_CONFIG || {};
 const SCRIPT_URL = CONFIG.appsScriptUrl || '';
 const GOOGLE_CLIENT_ID = CONFIG.googleClientId || '';
+const SESSION_STORAGE_KEY = 'dino-crisis-google-session-v1';
 const isGoogleConfigured = GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith('REPLACE_WITH_');
 const DEMO_RUNS = [
   { id: 'demo-1', player: 'RaptorRunner', category: 'ANY%', time: '00:38:42', platform: 'PC', date: '2025-08-14', video: 'https://www.youtube.com/results?search_query=Dino+Crisis+speedrun', demo: true },
@@ -20,8 +21,9 @@ let selectedCategory = 'ANY%';
 let searchQuery = '';
 let runs = [...DEMO_RUNS];
 let currentUser = null;
-let idToken = null;
+let idToken = readStoredToken();
 let googleButtonRendered = false;
+const knownNotificationIds = new Set();
 const tableBody = document.querySelector('#run-rows');
 const emptyState = document.querySelector('#empty-state');
 const dialog = document.querySelector('#submit-dialog');
@@ -32,6 +34,8 @@ const dateField = form.elements.date;
 const moderationPanel = document.querySelector('#moderation-panel');
 const pendingRuns = document.querySelector('#pending-runs');
 const myRunsSection = document.querySelector('#my-runs-section');
+const notificationsSection = document.querySelector('#notifications-section');
+const notificationsList = document.querySelector('#notifications-list');
 dateField.max = new Date().toISOString().slice(0, 10);
 dateField.value = dateField.max;
 function secondsFromTime(value) {
@@ -88,12 +92,35 @@ function showToast(message) {
   toast.textContent = message; toast.classList.add('show');
   window.setTimeout(() => toast.classList.remove('show'), 3600);
 }
+function readStoredToken() {
+  try {
+    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    if (!parsed.token || parsed.expiresAt <= Date.now() + 30000) {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      return null;
+    }
+    return parsed.token;
+  } catch { return null; }
+}
+function storeToken(token) {
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, '=')));
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ token, expiresAt: Number(claims.exp) * 1000 }));
+  } catch { throw new Error('No se pudo guardar la sesión de Google. Vuelve a iniciar sesión.'); }
+}
+function clearStoredToken() {
+  try { sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch { /* almacenamiento no disponible */ }
+}
 document.querySelectorAll('[data-open-submit]').forEach(button => button.addEventListener('click', () => openDialog()));
 document.querySelector('.close-button').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
 document.querySelectorAll('.category-tab').forEach(tab => tab.addEventListener('click', () => { selectedCategory = tab.dataset.category; render(); }));
 document.querySelector('#search').addEventListener('input', event => { searchQuery = event.target.value.trim().toLowerCase(); render(); });
 document.querySelector('#my-runs-button').addEventListener('click', loadMyRuns);
+document.querySelector('#notifications-button').addEventListener('click', toggleNotifications);
 document.querySelector('#sign-out-button').addEventListener('click', signOut);
 document.querySelector('#refresh-pending').addEventListener('click', loadPendingRuns);
 document.addEventListener('keydown', event => {
@@ -152,6 +179,12 @@ async function apiPost(payload) {
   catch { throw new Error('La respuesta de Apps Script no es JSON válido. Actualiza el despliegue del script.'); }
   if (!result.ok) {
     const message = result.error || 'La solicitud no pudo completarse.';
+    if (result.stage === 'validar el token de Google') {
+      throw new Error(`${message} Falló la etapa de validación del token; ejecuta authorizeRunArchive() en Apps Script, acepta permisos y vuelve a desplegar. Ref. ${result.requestId || 'sin ID'}`);
+    }
+    if (result.stage === 'abrir la hoja de cálculo') {
+      throw new Error(`${message} Revisa que la implementación se ejecute como propietario y tenga acceso a la hoja. Ref. ${result.requestId || 'sin ID'}`);
+    }
     if (message === 'No se pudo completar la solicitud.') {
       throw new Error('El Apps Script activo devolvió un error genérico. Actualiza el despliegue con apps-script/Code.gs y revisa “Ejecuciones” en Apps Script.');
     }
@@ -190,7 +223,7 @@ function renderGoogleSignInButton() {
     theme: 'filled_black',
     size: 'large',
     shape: 'pill',
-    text: 'continue_with',
+    text: 'signin_with',
     width: 200,
     logo_alignment: 'left',
   });
@@ -200,26 +233,54 @@ function renderGoogleSignInButton() {
 async function handleGoogleCredentialResponse(response) {
   idToken = response.credential;
   try {
+    storeToken(idToken);
     const result = await apiPost({ action: 'profile', idToken });
-    currentUser = result.user;
-    document.querySelector('#account-name').textContent = `${currentUser.name}${currentUser.role === 'moderator' ? ' · MOD' : ''}`;
-    document.querySelector('#account-box').hidden = false;
-    document.querySelector('#google-signin-button').hidden = true;
-    document.querySelector('#auth-config-notice').hidden = true;
+    activateUser(result.user);
     showToast(`Sesión iniciada: ${currentUser.name}`);
-    if (currentUser.role === 'moderator') { moderationPanel.hidden = false; loadPendingRuns(); }
+    loadNotifications();
   } catch (authError) {
     idToken = null; currentUser = null;
+    clearStoredToken();
+    document.querySelector('#account-box').hidden = true;
+    document.querySelector('#google-signin-button').hidden = false;
     showToast(authError.message);
+  }
+}
+
+function activateUser(user) {
+  currentUser = user;
+  document.querySelector('#account-name').textContent = `${currentUser.name}${currentUser.role === 'moderator' ? ' · MOD' : ''}`;
+  document.querySelector('#account-box').hidden = false;
+  document.querySelector('#google-signin-button').hidden = true;
+  document.querySelector('#auth-config-notice').hidden = true;
+  if (currentUser.role === 'moderator') { moderationPanel.hidden = false; loadPendingRuns(); }
+}
+
+async function restoreSession() {
+  if (!idToken) { renderGoogleSignInButton(); return; }
+  document.querySelector('#google-signin-button').hidden = true;
+  document.querySelector('#auth-config-notice').hidden = false;
+  document.querySelector('#auth-config-notice').textContent = 'RESTAURANDO SESIÓN…';
+  try {
+    const result = await apiPost({ action: 'profile', idToken });
+    activateUser(result.user);
+    loadNotifications();
+  } catch {
+    idToken = null; currentUser = null; clearStoredToken();
+    document.querySelector('#auth-config-notice').textContent = 'INICIA SESIÓN CON GOOGLE';
+    document.querySelector('#google-signin-button').hidden = false;
+    renderGoogleSignInButton();
   }
 }
 
 function signOut() {
   idToken = null; currentUser = null;
+  clearStoredToken();
   document.querySelector('#account-box').hidden = true;
   document.querySelector('#google-signin-button').hidden = false;
   moderationPanel.hidden = true;
   myRunsSection.hidden = true;
+  notificationsSection.hidden = true;
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   showToast('Sesión cerrada en este navegador');
 }
@@ -247,6 +308,59 @@ async function loadPendingRuns() {
   } catch (requestError) { message.textContent = requestError.message; }
 }
 
+async function loadNotifications(announceNew = false) {
+  if (!idToken) return;
+  try {
+    const result = await apiPost({ action: 'notifications', idToken });
+    const notifications = result.notifications || [];
+    const unread = notifications.filter(item => item.unread);
+    const badge = document.querySelector('#notification-count');
+    badge.textContent = String(unread.length);
+    badge.hidden = unread.length === 0;
+    renderNotifications(notifications);
+    if (announceNew) {
+      const newItems = unread.filter(item => !knownNotificationIds.has(item.id));
+      newItems.forEach(item => showToast(item.message));
+    }
+    notifications.forEach(item => knownNotificationIds.add(item.id));
+  } catch (requestError) {
+    notificationsList.textContent = requestError.message;
+  }
+}
+
+function renderNotifications(notifications) {
+  notificationsList.replaceChildren();
+  if (!notifications.length) { notificationsList.textContent = 'Todavía no tienes notificaciones.'; return; }
+  notifications.forEach(item => {
+    const card = document.createElement('article');
+    card.className = `notification-card${item.unread ? ' notification-unread' : ''}`;
+    const state = document.createElement('span'); state.className = `notification-state ${item.type === 'approved' ? 'approved' : 'rejected'}`;
+    state.textContent = item.type === 'approved' ? 'APROBADA' : 'RECHAZADA';
+    const message = document.createElement('p'); message.textContent = item.message;
+    const date = document.createElement('time'); date.textContent = item.date;
+    card.append(state, message, date); notificationsList.append(card);
+  });
+}
+
+async function toggleNotifications() {
+  if (!idToken) return;
+  notificationsSection.hidden = !notificationsSection.hidden;
+  if (notificationsSection.hidden) return;
+  notificationsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  try {
+    const result = await apiPost({ action: 'notifications', idToken });
+    const notifications = result.notifications || [];
+    renderNotifications(notifications);
+    const unreadIds = notifications.filter(item => item.unread).map(item => item.id);
+    if (unreadIds.length) {
+      await apiPost({ action: 'markNotificationsRead', idToken, notificationIds: unreadIds });
+      const badge = document.querySelector('#notification-count'); badge.hidden = true; badge.textContent = '0';
+      notifications.forEach(item => { item.unread = false; });
+      renderNotifications(notifications);
+    }
+  } catch (requestError) { notificationsList.textContent = requestError.message; }
+}
+
 function renderRunCards(container, list, showOwner) {
   container.replaceChildren();
   if (!list.length) { container.textContent = showOwner ? 'Todavía no has enviado runs.' : 'No hay runs pendientes.'; return; }
@@ -271,15 +385,23 @@ function renderRunCards(container, list, showOwner) {
 }
 
 async function reviewRun(runId, status, button) {
+  let reviewNote = '';
+  if (status === 'rejected') {
+    reviewNote = window.prompt('Indica el motivo del rechazo. Se enviará al jugador:')?.trim() || '';
+    if (!reviewNote) { showToast('El rechazo se canceló: hace falta indicar el motivo'); return; }
+    if (reviewNote.length > 300) { showToast('El motivo no puede superar 300 caracteres'); return; }
+  }
   button.disabled = true;
   try {
-    await apiPost({ action: 'reviewRun', idToken, runId, status });
+    await apiPost({ action: 'reviewRun', idToken, runId, status, reviewNote });
     showToast(status === 'approved' ? 'Run aprobada' : 'Run rechazada');
     await loadPendingRuns();
     await loadLeaderboard();
+    if (currentUser) loadNotifications();
   } catch (requestError) { showToast(requestError.message); button.disabled = false; }
 }
 
 render();
 loadLeaderboard();
-renderGoogleSignInButton();
+restoreSession();
+window.setInterval(() => { if (idToken) loadNotifications(true); }, 60000);

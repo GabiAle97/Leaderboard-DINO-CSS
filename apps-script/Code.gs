@@ -6,8 +6,10 @@ const MESSAGE_COOLDOWN_SECONDS = 45;
 const GOOGLE_CLIENT_ID = '792269745897-7oj158lrb89u6lrgiao1g0eapriajcvj.apps.googleusercontent.com';
 const RUNS_SHEET_NAME = 'Dino Crisis Runs';
 const USERS_SHEET_NAME = 'Usuarios';
+const NOTIFICATIONS_SHEET_NAME = 'Notificaciones';
 const RUN_HEADERS = ['ID', 'Fecha de envío', 'Email', 'Jugador', 'Categoría', 'Tiempo', 'Plataforma', 'Fecha de run', 'Video', 'Notas', 'Estado', 'Revisado por', 'Fecha de revisión', 'Nota de revisión'];
 const USER_HEADERS = ['Email', 'Nombre de Google', 'Rol', 'Fecha de registro'];
+const NOTIFICATION_HEADERS = ['ID', 'Email', 'Run ID', 'Tipo', 'Mensaje', 'Fecha', 'Leída'];
 const RUN_CATEGORIES = ['ANY%', 'BEST ENDING', 'SEGMENTED%'];
 
 function doGet(e) {
@@ -39,39 +41,66 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  let errorStage = 'leer la solicitud';
   try {
     const payload = JSON.parse(e && e.postData && e.postData.contents || '{}');
     // Los mensajes existentes siguen aceptando su payload original sin action.
     if (payload.action === 'submitMessage' || !payload.action) return submitMessage_(payload);
 
+    errorStage = 'abrir la hoja de cálculo';
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     switch (payload.action) {
       case 'profile': {
+        errorStage = 'validar el token de Google';
         const identity = verifyGoogleIdentity_(payload.idToken);
+        errorStage = 'crear o consultar el perfil';
         return jsonOutput_({ ok: true, user: publicUser_(ensureUser_(spreadsheet, identity)) });
       }
       case 'submitRun': {
+        errorStage = 'validar el token de Google';
         const identity = verifyGoogleIdentity_(payload.idToken);
+        errorStage = 'guardar la submission';
         const user = ensureUser_(spreadsheet, identity);
         return submitRun_(spreadsheet, identity, user, payload);
       }
       case 'myRuns': {
+        errorStage = 'validar el token de Google';
         const identity = verifyGoogleIdentity_(payload.idToken);
+        errorStage = 'leer tus runs';
         ensureUser_(spreadsheet, identity);
         const runs = getRuns_(spreadsheet).filter(run => run.email === identity.email);
         return jsonOutput_({ ok: true, runs: runs });
       }
-      case 'pendingRuns': {
+      case 'notifications': {
+        errorStage = 'validar el token de Google';
         const identity = verifyGoogleIdentity_(payload.idToken);
+        errorStage = 'leer tus notificaciones';
+        ensureUser_(spreadsheet, identity);
+        return jsonOutput_({ ok: true, notifications: getNotifications_(spreadsheet, identity.email) });
+      }
+      case 'markNotificationsRead': {
+        errorStage = 'validar el token de Google';
+        const identity = verifyGoogleIdentity_(payload.idToken);
+        errorStage = 'marcar tus notificaciones como leídas';
+        ensureUser_(spreadsheet, identity);
+        return markNotificationsRead_(spreadsheet, identity.email, payload.notificationIds);
+      }
+      case 'pendingRuns': {
+        errorStage = 'validar el token de Google';
+        const identity = verifyGoogleIdentity_(payload.idToken);
+        errorStage = 'comprobar permisos de moderador';
         const user = ensureUser_(spreadsheet, identity);
         requireModerator_(user);
         const runs = getRuns_(spreadsheet).filter(run => run.status === 'pending');
         return jsonOutput_({ ok: true, runs: runs });
       }
       case 'reviewRun': {
+        errorStage = 'validar el token de Google';
         const identity = verifyGoogleIdentity_(payload.idToken);
+        errorStage = 'comprobar permisos de moderador';
         const user = ensureUser_(spreadsheet, identity);
         requireModerator_(user);
+        errorStage = 'guardar la decisión de moderación';
         return reviewRun_(spreadsheet, identity, payload);
       }
       default:
@@ -83,6 +112,7 @@ function doPost(e) {
     return jsonOutput_({
       ok: false,
       requestId: requestId,
+      stage: errorStage,
       error: error && error.publicMessage ? error.publicMessage : 'Error interno del Apps Script. Revisa el registro de ejecuciones.'
     });
   }
@@ -188,6 +218,7 @@ function reviewRun_(spreadsheet, identity, payload) {
   const decision = String(payload.status || '').trim().toLowerCase();
   const reviewNote = cleanText_(payload.reviewNote, 300);
   if (!runId || ['approved', 'rejected'].indexOf(decision) === -1) throw publicError_('La decisión de moderación no es válida.');
+  if (decision === 'rejected' && !reviewNote) throw publicError_('Indica el motivo del rechazo para poder notificar al jugador.');
 
   const sheet = ensureSheet_(spreadsheet, RUNS_SHEET_NAME, RUN_HEADERS);
   const lock = LockService.getScriptLock();
@@ -200,12 +231,48 @@ function reviewRun_(spreadsheet, identity, payload) {
       sheet.getRange(i + 1, 11, 1, 4).setValues([[
         decision, safeSheetText_(identity.email), new Date(), safeSheetText_(reviewNote)
       ]]);
+      const notificationSheet = ensureSheet_(spreadsheet, NOTIFICATIONS_SHEET_NAME, NOTIFICATION_HEADERS);
+      const outcome = decision === 'approved' ? 'aprobada' : 'rechazada';
+      const reason = decision === 'rejected' ? ' Motivo: ' + reviewNote : '';
+      notificationSheet.appendRow([
+        Utilities.getUuid(), safeSheetText_(String(values[i][2] || '').toLowerCase()), runId,
+        decision, 'Tu run ' + String(values[i][3] || '') + ' (' + String(values[i][4] || '') + ') fue ' + outcome + '.' + reason,
+        new Date(), false
+      ]);
       return jsonOutput_({ ok: true, status: decision, runId: runId });
     }
     throw publicError_('No se encontró la run indicada.');
   } finally {
     lock.releaseLock();
   }
+}
+
+function getNotifications_(spreadsheet, email) {
+  const sheet = spreadsheet.getSheetByName(NOTIFICATIONS_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const values = sheet.getDataRange().getDisplayValues();
+  return values.slice(1).filter(row => String(row[1] || '').trim().toLowerCase() === email)
+    .reverse().slice(0, 50).map(row => ({
+      id: row[0], runId: row[2], type: row[3], message: row[4], date: row[5], unread: String(row[6]).toLowerCase() !== 'true'
+    }));
+}
+
+function markNotificationsRead_(spreadsheet, email, notificationIds) {
+  const ids = Array.isArray(notificationIds) ? notificationIds.map(String).slice(0, 50) : [];
+  if (!ids.length) return jsonOutput_({ ok: true, updated: 0 });
+  const idSet = {};
+  ids.forEach(id => { idSet[id] = true; });
+  const sheet = spreadsheet.getSheetByName(NOTIFICATIONS_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return jsonOutput_({ ok: true, updated: 0 });
+  const values = sheet.getDataRange().getValues();
+  let updated = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][1] || '').trim().toLowerCase() === email && idSet[String(values[i][0])]) {
+      sheet.getRange(i + 1, 7).setValue(true);
+      updated++;
+    }
+  }
+  return jsonOutput_({ ok: true, updated: updated });
 }
 
 function getRuns_(spreadsheet) {

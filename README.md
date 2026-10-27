@@ -12,7 +12,9 @@ Las filas y tiempos precargados son **datos ficticios de demostración**, no ré
 
 ## Login, submissions y moderación
 
-El proyecto incluye el código fuente extendido del Apps Script en `apps-script/Code.gs` y el cliente web espera estas acciones: `profile`, `submitRun`, `myRuns`, `pendingRuns`, `reviewRun` y `GET?action=leaderboard`. El script valida el ID token de Google en servidor contra su audiencia OAuth; los usuarios nuevos se agregan con rol `player`. Las runs nuevas quedan `pending`; el leaderboard público solo devuelve runs `approved`. Los moderadores se asignan manualmente en la pestaña protegida `Usuarios`, cambiando su rol a `moderator`. Nunca permitas que usuarios públicos editen esa pestaña.
+El proyecto incluye el código fuente extendido del Apps Script en `apps-script/Code.gs` y el cliente web espera las acciones `profile`, `submitRun`, `myRuns`, `pendingRuns`, `reviewRun`, `notifications`, `markNotificationsRead` y `GET?action=leaderboard`. El script valida el ID token de Google en servidor contra su audiencia OAuth; los usuarios nuevos se agregan con rol `player`. Las runs nuevas quedan `pending`; el leaderboard público solo devuelve runs `approved`. Los moderadores se asignan manualmente en la pestaña protegida `Usuarios`, cambiando su rol a `moderator`. Nunca permitas que usuarios públicos editen esa pestaña.
+
+La sesión del usuario se conserva en `sessionStorage` y se revalida contra Apps Script tras recargar la página. Dura hasta que venza el ID token de Google (normalmente alrededor de una hora) o se cierre la pestaña/sesión. Al aprobar o rechazar una run, Apps Script escribe una notificación en `Notificaciones`; los rechazos requieren motivo. El usuario ve el contador y los avisos al volver al sitio e iniciar/restaurar sesión.
 
 Para habilitarlo:
 
@@ -20,7 +22,7 @@ Para habilitarlo:
 2. Pon el mismo ID en `config.js` y en `GOOGLE_CLIENT_ID` de `apps-script/Code.gs`. El ID de cliente es público; no agregues client secrets al frontend.
 3. Copia el contenido actualizado de `apps-script/Code.gs` al proyecto Apps Script asociado a la misma hoja. El script conserva el endpoint anterior de Match Details y los mensajes existentes, y crea `Dino Crisis Runs` y `Usuarios` cuando se necesiten.
 4. Guarda y vuelve a desplegar como aplicación web, ejecutando como propietario y habilitada para recibir solicitudes. La hoja debe pertenecer al propietario que ejecuta el script. Revisa y autoriza el acceso externo que requiere la validación del token de Google.
-5. Inicia sesión una vez para crear tu fila en `Usuarios`; asigna `moderator` manualmente a las cuentas de confianza y protege esa pestaña. Los cambios de Apps Script requieren actualizar el despliegue existente o crear uno nuevo; si cambia la URL, actualiza `config.js`.
+5. Inicia sesión una vez para crear tu fila en `Usuarios`; asigna `moderator` manualmente a las cuentas de confianza y protege esa pestaña. Si ya existe el despliegue, actualízalo para incluir `Notificaciones` y los nuevos endpoints; si cambia la URL, actualiza `config.js`.
 
 El despliegue actual responde a `GET?action=leaderboard` con `{ "runs": [] }`, por lo que la URL está configurada en `config.js` y la lectura pública del leaderboard ya tiene el formato esperado. El flujo de login y escritura requiere probarse con una cuenta autorizada después de copiar y desplegar el código actualizado; no envíes submissions de prueba a la hoja de producción.
 
