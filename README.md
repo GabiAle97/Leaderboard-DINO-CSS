@@ -1,0 +1,43 @@
+# Dino Crisis Run Archive
+
+Prototipo web responsive para registrar y explorar runs de **Dino Crisis Cutscene Skip Mod** en estas categorías: ANY%, BEST ENDING y SEGMENTED%.
+
+## Ejecutar
+
+Sirve la carpeta desde un origen HTTP/HTTPS local o publicado; el inicio de sesión de Google no funciona desde `file://`. No requiere dependencias de npm. Las submissions se guardan en Google Sheets cuando se configure y despliegue el Apps Script. La plataforma aceptada es exclusivamente PC.
+
+## Datos de demostración
+
+Las filas y tiempos precargados son **datos ficticios de demostración**, no récords ni resultados verificados. El estado del archivo indica que se está mostrando la demo. Elimina las filas de `DEMO_RUNS` en `app.js` cuando estén disponibles las runs reales.
+
+## Login, submissions y moderación
+
+El proyecto incluye el código fuente extendido del Apps Script en `apps-script/Code.gs` y el cliente web espera estas acciones: `profile`, `submitRun`, `myRuns`, `pendingRuns`, `reviewRun` y `GET?action=leaderboard`. El script valida el ID token de Google en servidor contra su audiencia OAuth; los usuarios nuevos se agregan con rol `player`. Las runs nuevas quedan `pending`; el leaderboard público solo devuelve runs `approved`. Los moderadores se asignan manualmente en la pestaña protegida `Usuarios`, cambiando su rol a `moderator`. Nunca permitas que usuarios públicos editen esa pestaña.
+
+Para habilitarlo:
+
+1. Crea un cliente OAuth de tipo aplicación web en Google Cloud, configura los orígenes autorizados (por ejemplo, tu dominio de producción y `http://localhost:5500`) y copia el ID de cliente público.
+2. Pon el mismo ID en `config.js` y en `GOOGLE_CLIENT_ID` de `apps-script/Code.gs`. El ID de cliente es público; no agregues client secrets al frontend.
+3. Copia el contenido actualizado de `apps-script/Code.gs` al proyecto Apps Script asociado a la misma hoja. El script conserva el endpoint anterior de Match Details y los mensajes existentes, y crea `Dino Crisis Runs` y `Usuarios` cuando se necesiten.
+4. Guarda y vuelve a desplegar como aplicación web, ejecutando como propietario y habilitada para recibir solicitudes. La hoja debe pertenecer al propietario que ejecuta el script. Revisa y autoriza el acceso externo que requiere la validación del token de Google.
+5. Inicia sesión una vez para crear tu fila en `Usuarios`; asigna `moderator` manualmente a las cuentas de confianza y protege esa pestaña. Los cambios de Apps Script requieren actualizar el despliegue existente o crear uno nuevo; si cambia la URL, actualiza `config.js`.
+
+El despliegue actual responde a `GET?action=leaderboard` con `{ "runs": [] }`, por lo que la URL está configurada en `config.js` y la lectura pública del leaderboard ya tiene el formato esperado. El flujo de login y escritura requiere probarse con una cuenta autorizada después de copiar y desplegar el código actualizado; no envíes submissions de prueba a la hoja de producción.
+
+## Categorías
+
+- **ANY%**: completar el juego lo más rápido posible.
+- **BEST ENDING**: completar el juego obteniendo el mejor ending.
+- **SEGMENTED%**: registrar una run compuesta por segmentos; se compara el tiempo total.
+
+## Requisitos para verificar runs
+
+1. La metadata de Cutscene Skip Mod debe verse en la grabación. En OBS, añade la ventana `Dino Crisis skip status` como fuente.
+2. Para tiempos inferiores a 35 minutos, los inputs deben estar visibles en pantalla.
+3. El sonido del juego debe estar activado y ser audible.
+4. La pantalla final del juego debe mostrar el IGT.
+5. El video debe contener solo una run completa, de principio a fin; no se aceptan VODs de streams completos ni segmentos introductorios o de cierre ajenos a la run.
+6. No se permite música de fondo.
+7. No se permiten pausas superiores a 2 minutos durante la run.
+
+Las reglas precisas (versión del mod, timing, pausas, segmentos permitidos y criterio exacto de Best Ending) deben acordarse y publicarse antes de considerar oficiales los tiempos.

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101513" />
+    <meta name="description" content="Leaderboard comunitario de Dino Crisis Cutscene Skip Mod." />
+    <title>DINO CRISIS // RUN ARCHIVE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="auth.css" />
+  </head>
+  <body>
+    <div class="scanlines" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Dino Crisis Run Archive, inicio">
+        <span class="brand-mark">DC<span>//</span></span>
+        <span class="brand-name">RUN<span>ARCHIVE</span></span>
+      </a>
+      <nav class="top-nav" aria-label="Navegación principal">
+        <a class="nav-active" href="#leaderboard">LEADERBOARD</a>
+        <a href="#rules">REGLAS</a>
+      </nav>
+      <div class="auth-controls">
+        <div id="google-signin-button"></div>
+        <span id="auth-config-notice">LOGIN GOOGLE PENDIENTE DE CONFIGURACIÓN</span>
+        <div class="account-box" id="account-box" hidden>
+          <span id="account-name"></span>
+          <button type="button" class="account-action" id="my-runs-button">MIS RUNS</button>
+          <button type="button" class="account-action" id="sign-out-button">SALIR</button>
+        </div>
+      </div>
+      <button class="button button-outline top-submit" data-open-submit>SUBMIT RUN <span>↗</span></button>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow"><i></i> COMUNIDAD SPEEDRUN · ARCHIVO ABIERTO</div>
+          <h1>NO HAY TIEMPO<br />QUE <span>PERDER.</span></h1>
+          <p>El leaderboard de <strong>Dino Crisis</strong> con Cutscene Skip Mod.<br class="desktop-break" /> Corre rápido. Sobrevive. Deja constancia.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#leaderboard">VER LEADERBOARD <span>↓</span></a>
+            <button class="button button-quiet" data-open-submit>ENVIAR UNA RUN <span>↗</span></button>
+          </div>
+        </div>
+        <div class="hero-art" aria-label="Ilustración abstracta de una instalación de investigación en alerta">
+          <div class="art-grid"></div><div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+          <div class="art-crosshair">+</div><div class="art-side-label">SURVIVAL<br />ARCHIVE / 01</div>
+          <div class="art-warning"><span>!</span> ALERTA DE CONTENCIÓN <b>ACTIVA</b></div>
+          <div class="art-coordinate">N 34° 42′ 12″ &nbsp; E 135° 29′ 03″</div>
+        </div>
+        <div class="hero-index"><span>01</span> / 03 <i></i> RANKED CATEGORIES</div>
+      </section>
+
+      <section class="leaderboard section-wrap" id="leaderboard">
+        <div class="section-heading">
+          <div><div class="eyebrow"><i></i> CLASIFICACIÓN DE LA COMUNIDAD</div><h2>THE <span>LEADERBOARD</span></h2></div>
+          <div class="game-chip"><span class="chip-dot"></span> DINO CRISIS <b>·</b> CUTSCENE SKIP MOD</div>
+        </div>
+        <div class="leaderboard-tools">
+          <div class="category-tabs" role="tablist" aria-label="Categorías">
+            <button class="category-tab active" role="tab" aria-selected="true" data-category="ANY%">ANY% <span>01</span></button>
+            <button class="category-tab" role="tab" aria-selected="false" data-category="BEST ENDING">BEST ENDING <span>02</span></button>
+            <button class="category-tab" role="tab" aria-selected="false" data-category="SEGMENTED%">SEGMENTED% <span>03</span></button>
+          </div>
+          <label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="Buscar jugador..." aria-label="Buscar jugador" /><kbd>/</kbd></label>
+        </div>
+        <div class="category-description"><span class="description-line"></span><p id="category-description">Finaliza el juego lo más rápido posible. Cualquier ending.</p><span class="entries-count" id="entries-count">0 RUNS</span></div>
+        <div class="table-shell">
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>RANK</th><th>JUGADOR</th><th>TIEMPO</th><th>PLATAFORMA</th><th>FECHA</th><th>VIDEO</th></tr></thead>
+              <tbody id="run-rows"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="empty-state" hidden><span class="empty-icon">∅</span><strong>NO HAY RUNS EN ESTA CATEGORÍA</strong><p>El primer puesto está esperando. ¿Será tuyo?</p><button class="button button-primary" data-open-submit>ENVIAR LA PRIMERA RUN <span>↗</span></button></div>
+        </div>
+        <div class="table-foot"><span><i class="status-pulse"></i> <span id="connection-status">ARCHIVO LOCAL · DATOS DE DEMOSTRACIÓN</span></span><span>ORDENADO POR TIEMPO <b>↑</b></span></div>
+        <section class="moderation-panel" id="moderation-panel" hidden>
+          <div class="moderation-heading"><div><div class="eyebrow"><i></i> HERRAMIENTAS DE MODERACIÓN</div><h3>RUNS <span>PENDIENTES</span></h3></div><button class="button button-outline" id="refresh-pending">ACTUALIZAR ↻</button></div>
+          <div id="pending-runs" class="pending-runs"></div>
+          <p id="moderation-message" class="moderation-message" aria-live="polite"></p>
+        </section>
+      </section>
+
+      <section class="my-runs-section section-wrap" id="my-runs-section" hidden>
+        <div class="section-heading"><div><div class="eyebrow"><i></i> TU PERFIL</div><h2>MIS <span>RUNS</span></h2></div></div>
+        <div id="my-runs-list" class="my-runs-list"></div>
+      </section>
+
+      <section class="rules-section section-wrap" id="rules">
+        <div class="rules-heading">
+          <div><div class="eyebrow"><i></i> ESTÁNDARES DE VERIFICACIÓN</div><h2>REGLAS DE <span>LA COMUNIDAD</span></h2></div>
+          <p>Para que cada resultado pueda revisarse de forma clara y justa, todas las submissions deben cumplir estos requisitos.</p>
+        </div>
+        <ol class="rules-list">
+          <li><span class="rule-number">01</span><div><strong>Metadata del mod visible</strong><p>La metadata generada por Cutscene Skip Mod debe aparecer en la grabación. En OBS, añade la ventana <em>Dino Crisis skip status</em> como fuente.</p></div></li>
+          <li><span class="rule-number">02</span><div><strong>Inputs visibles para runs sub-35</strong><p>Si el tiempo final es inferior a 35 minutos, la grabación debe mostrar los inputs en pantalla durante la run.</p></div></li>
+          <li><span class="rule-number">03</span><div><strong>Audio del juego activado</strong><p>El sonido del juego debe ser audible en el video; no se aceptan runs con el audio del juego muteado.</p></div></li>
+          <li><span class="rule-number">04</span><div><strong>IGT visible en la pantalla final</strong><p>La pantalla final del juego debe quedar visible y mostrar el tiempo en juego (IGT).</p></div></li>
+          <li><span class="rule-number">05</span><div><strong>Video dedicado a una sola run</strong><p>El video enviado debe contener únicamente la run completa, desde el inicio hasta el final. No se aceptan VODs de streams completos ni videos con segmentos de inicio o cierre ajenos a la run.</p></div></li>
+          <li><span class="rule-number">06</span><div><strong>Sin música de fondo</strong><p>No se permite música añadida de fondo durante la run.</p></div></li>
+          <li><span class="rule-number">07</span><div><strong>Pausas limitadas</strong><p>No se permiten pausas de más de 2 minutos durante la run.</p></div></li>
+        </ol>
+      </section>
+
+      <section class="submit-banner section-wrap">
+        <div class="banner-icon">▤</div><div><div class="eyebrow"><i></i> ¿NUEVO RÉCORD?</div><h3>Tu run merece <span>ser vista.</span></h3><p>Comparte tu tiempo y el video de la run. Las submissions se revisan antes de aparecer en el leaderboard.</p></div><button class="button button-primary" data-open-submit>SUBMIT RUN <span>↗</span></button>
+      </section>
+    </main>
+
+    <footer><a class="brand footer-brand" href="#top"><span class="brand-mark">DC<span>//</span></span><span class="brand-name">RUN<span>ARCHIVE</span></span></a><span>FAN-MADE COMMUNITY PROJECT <b>·</b> DINO CRISIS SPEEDRUNS</span><span class="footer-code">RC-1999 / SURVIVE THE CLOCK</span></footer>
+
+    <dialog id="submit-dialog" class="submit-dialog">
+      <form id="submit-form" method="dialog" novalidate>
+        <div class="dialog-header"><div><div class="eyebrow"><i></i> NUEVA SUBMISSION</div><h2>REGISTRA TU <span>RUN.</span></h2></div><button type="button" class="close-button" aria-label="Cerrar">×</button></div>
+        <p class="dialog-intro">Completa los datos de tu run. Los campos marcados con * son obligatorios.</p>
+        <div class="form-grid">
+          <label class="field field-wide">NOMBRE DE JUGADOR *<input name="player" maxlength="32" required placeholder="Tu nombre o alias" autocomplete="nickname" /></label>
+          <label class="field">CATEGORÍA *<select name="category" required><option>ANY%</option><option>BEST ENDING</option><option>SEGMENTED%</option></select></label>
+          <label class="field">TIEMPO (HH:MM:SS) *<input name="time" required placeholder="00:42:18" inputmode="numeric" pattern="(?:\d{1,2}:)?[0-5]?\d:[0-5]\d" /></label>
+          <label class="field">PLATAFORMA<select name="platform" required><option selected>PC</option></select></label>
+          <label class="field">FECHA DE LA RUN *<input name="date" type="date" required /></label>
+          <label class="field field-wide">VIDEO DE LA RUN *<input name="video" type="url" required placeholder="https://youtu.be/..." /></label>
+          <label class="field field-wide">NOTAS <textarea name="notes" rows="3" maxlength="300" placeholder="Versión, estrategia, detalles relevantes... (opcional)"></textarea></label>
+        </div>
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+        <div class="dialog-footer"><span>Tu submission se guardará en la hoja como pendiente de verificación.</span><button class="button button-primary" type="submit">GUARDAR SUBMISSION <span>↗</span></button></div>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="https://accounts.google.com/gsi/client" async defer onload="window.renderGoogleSignInButton && window.renderGoogleSignInButton()"></script>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
