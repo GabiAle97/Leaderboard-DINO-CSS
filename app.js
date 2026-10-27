@@ -186,7 +186,14 @@ function renderGoogleSignInButton() {
   notice.hidden = true;
   if (googleButtonRendered || !window.google || !google.accounts || !google.accounts.id) return;
   google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredentialResponse, auto_select: false });
-  google.accounts.id.renderButton(document.querySelector('#google-signin-button'), { theme: 'filled_black', size: 'small', shape: 'rectangular', text: 'signin_with', width: 170 });
+  google.accounts.id.renderButton(document.querySelector('#google-signin-button'), {
+    theme: 'filled_black',
+    size: 'large',
+    shape: 'pill',
+    text: 'continue_with',
+    width: 200,
+    logo_alignment: 'left',
+  });
   googleButtonRendered = true;
 }
 
