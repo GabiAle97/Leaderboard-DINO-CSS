@@ -78,7 +78,13 @@ function doPost(e) {
         return jsonOutput_({ ok: false, error: 'Acción no reconocida.' });
     }
   } catch (error) {
-    return jsonOutput_({ ok: false, error: error && error.publicMessage ? error.publicMessage : 'No se pudo completar la solicitud.' });
+    const requestId = Utilities.getUuid();
+    console.error('doPost failure [' + requestId + ']: ' + (error && error.stack ? error.stack : error));
+    return jsonOutput_({
+      ok: false,
+      requestId: requestId,
+      error: error && error.publicMessage ? error.publicMessage : 'Error interno del Apps Script. Revisa el registro de ejecuciones.'
+    });
   }
 }
 
@@ -98,6 +104,15 @@ function verifyGoogleIdentity_(idToken) {
   const emailVerified = claims.email_verified === true || claims.email_verified === 'true';
   if (!tokenValid || !email || !emailVerified || !claims.sub) throw publicError_('No se pudo verificar la cuenta de Google.');
   return { email: email, name: String(claims.name || email.split('@')[0]).slice(0, 80), sub: String(claims.sub) };
+}
+
+// Ejecuta esta función manualmente una vez desde el editor para conceder al
+// propietario los permisos de hoja y de solicitudes externas (UrlFetchApp).
+function authorizeRunArchive() {
+  SpreadsheetApp.getActiveSpreadsheet().getId();
+  UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=authorization-check', {
+    method: 'get', muteHttpExceptions: true
+  });
 }
 
 function ensureUser_(spreadsheet, identity) {

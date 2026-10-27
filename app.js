@@ -150,7 +150,13 @@ async function apiPost(payload) {
   let result;
   try { result = await response.json(); }
   catch { throw new Error('La respuesta de Apps Script no es JSON válido. Actualiza el despliegue del script.'); }
-  if (!result.ok) throw new Error(result.error || 'La solicitud no pudo completarse.');
+  if (!result.ok) {
+    const message = result.error || 'La solicitud no pudo completarse.';
+    if (message === 'No se pudo completar la solicitud.') {
+      throw new Error('El Apps Script activo devolvió un error genérico. Actualiza el despliegue con apps-script/Code.gs y revisa “Ejecuciones” en Apps Script.');
+    }
+    throw new Error(result.requestId ? `${message} (ref. ${result.requestId})` : message);
+  }
   return result;
 }
 

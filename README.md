@@ -24,6 +24,8 @@ Para habilitarlo:
 
 El despliegue actual responde a `GET?action=leaderboard` con `{ "runs": [] }`, por lo que la URL está configurada en `config.js` y la lectura pública del leaderboard ya tiene el formato esperado. El flujo de login y escritura requiere probarse con una cuenta autorizada después de copiar y desplegar el código actualizado; no envíes submissions de prueba a la hoja de producción.
 
+Si una petición POST devuelve el error genérico, actualiza el despliegue con el `Code.gs` actual y consulta **Apps Script → Ejecuciones**. El script registra una referencia para el error sin incluir detalles internos en la respuesta pública. La comprobación de tokens usa `UrlFetchApp`; autoriza los permisos solicitados por el script como propietario durante el despliegue.
+
 ## Categorías
 
 - **ANY%**: completar el juego lo más rápido posible.
