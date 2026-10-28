@@ -3,15 +3,6 @@ const SCRIPT_URL = CONFIG.appsScriptUrl || '';
 const GOOGLE_CLIENT_ID = CONFIG.googleClientId || '';
 const SESSION_STORAGE_KEY = 'dino-crisis-google-session-v1';
 const isGoogleConfigured = GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith('REPLACE_WITH_');
-const DEMO_RUNS = [
-  { id: 'demo-1', player: 'RaptorRunner', category: 'ANY%', time: '00:38:42', platform: 'PC', date: '2025-08-14', video: 'https://www.youtube.com/results?search_query=Dino+Crisis+speedrun', demo: true },
-  { id: 'demo-2', player: 'Velocitron', category: 'ANY%', time: '00:41:09', platform: 'PC', date: '2025-07-29', video: 'https://www.youtube.com/results?search_query=Dino+Crisis+speedrun', demo: true },
-  { id: 'demo-3', player: 'ReginaMain', category: 'ANY%', time: '00:44:27', platform: 'PC', date: '2025-06-02', video: 'https://www.youtube.com/results?search_query=Dino+Crisis+speedrun', demo: true },
-  { id: 'demo-4', player: 'TacticalDino', category: 'BEST ENDING', time: '00:51:36', platform: 'PC', date: '2025-07-16', video: 'https://www.youtube.com/results?search_query=Dino+Crisis+speedrun', demo: true },
-  { id: 'demo-5', player: 'RedUmbrella', category: 'BEST ENDING', time: '00:55:12', platform: 'PC', date: '2025-05-21', video: 'https://www.youtube.com/results?search_query=Dino+Crisis+speedrun', demo: true },
-  { id: 'demo-6', player: 'SaveRoomZero', category: 'SEGMENTED%', time: '00:31:48', platform: 'PC', date: '2025-08-05', video: 'https://www.youtube.com/results?search_query=Dino+Crisis+speedrun', demo: true },
-  { id: 'demo-7', player: 'DinoSlayer', category: 'SEGMENTED%', time: '00:35:03', platform: 'PC', date: '2025-07-11', video: 'https://www.youtube.com/results?search_query=Dino+Crisis+speedrun', demo: true },
-];
 const descriptions = {
   'ANY%': 'Finaliza el juego lo más rápido posible. Cualquier ending.',
   'BEST ENDING': 'Consigue el mejor final disponible, en el menor tiempo posible.',
@@ -20,7 +11,7 @@ const descriptions = {
 let selectedCategory = 'ANY%';
 let activeView = 'home';
 let searchQuery = '';
-let runs = [...DEMO_RUNS];
+let runs = [];
 let resources = [];
 let selectedResourceFilter = 'all';
 let currentUser = null;
@@ -76,14 +67,12 @@ function render() {
     const player = document.createElement('td');
     const playerWrap = document.createElement('div'); playerWrap.className = 'player-cell';
     const avatar = createAvatar(nickname, run.avatarUrl);
-    const name = document.createElement(run.demo ? 'span' : 'button');
+    const name = document.createElement('button');
     name.textContent = nickname;
-    if (!run.demo) {
-      name.type = 'button';
-      name.className = 'player-profile-link';
-      name.setAttribute('aria-label', `Ver perfil público de ${nickname}`);
-      name.addEventListener('click', () => openPublicProfile(nickname));
-    }
+    name.type = 'button';
+    name.className = 'player-profile-link';
+    name.setAttribute('aria-label', `Ver perfil público de ${nickname}`);
+    name.addEventListener('click', () => openPublicProfile(nickname));
     playerWrap.append(avatar, name); player.append(playerWrap);
     const time = document.createElement('td'); time.className = 'time-cell'; time.textContent = run.time;
     const platform = document.createElement('td'); const tag = document.createElement('span'); tag.className = 'platform-tag'; tag.textContent = run.platform; platform.append(tag);
@@ -432,7 +421,7 @@ async function apiPost(payload) {
 
 async function loadLeaderboard() {
   const status = document.querySelector('#connection-status');
-  if (!SCRIPT_URL) { status.textContent = 'CONFIGURA APPS SCRIPT · MOSTRANDO DATOS DE DEMOSTRACIÓN'; return; }
+  if (!SCRIPT_URL) { status.textContent = 'APPS SCRIPT SIN CONFIGURAR · SIN RUNS'; return; }
   try {
     const endpoint = new URL(SCRIPT_URL);
     endpoint.searchParams.set('action', 'leaderboard');
@@ -440,11 +429,11 @@ async function loadLeaderboard() {
     if (!response.ok) throw new Error('HTTP error');
     const payload = await response.json();
     if (!Array.isArray(payload.runs)) throw new Error('El despliegue todavía no expone el leaderboard.');
-    runs = payload.runs.map(run => ({ ...run, demo: false }));
+    runs = payload.runs;
     status.textContent = 'APPS SCRIPT · RUNS VERIFICADAS';
     render();
   } catch {
-    status.textContent = 'APPS SCRIPT PENDIENTE DE ACTUALIZACIÓN · DATOS DE DEMOSTRACIÓN';
+    status.textContent = 'NO SE PUDIERON CARGAR LAS RUNS · REINTENTA MÁS TARDE';
   }
 }
 
