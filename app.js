@@ -68,20 +68,21 @@ function render() {
   document.querySelector('#entries-count').textContent = `${String(filtered.length).padStart(2, '0')} ${filtered.length === 1 ? 'RUN' : 'RUNS'}`;
   tableBody.replaceChildren();
   filtered.forEach((run, index) => {
+    const nickname = run.nickname || run.player;
     const row = document.createElement('tr');
     const rank = document.createElement('td');
     rank.className = `rank${index === 0 ? ' top-rank' : ''}`;
     rank.textContent = `#${String(index + 1).padStart(2, '0')}`;
     const player = document.createElement('td');
     const playerWrap = document.createElement('div'); playerWrap.className = 'player-cell';
-    const avatar = createAvatar(run.player, run.avatarUrl);
+    const avatar = createAvatar(nickname, run.avatarUrl);
     const name = document.createElement(run.demo ? 'span' : 'button');
-    name.textContent = run.player;
+    name.textContent = nickname;
     if (!run.demo) {
       name.type = 'button';
       name.className = 'player-profile-link';
-      name.setAttribute('aria-label', `Ver perfil público de ${run.player}`);
-      name.addEventListener('click', () => openPublicProfile(run.player));
+      name.setAttribute('aria-label', `Ver perfil público de ${nickname}`);
+      name.addEventListener('click', () => openPublicProfile(nickname));
     }
     playerWrap.append(avatar, name); player.append(playerWrap);
     const time = document.createElement('td'); time.className = 'time-cell'; time.textContent = run.time;

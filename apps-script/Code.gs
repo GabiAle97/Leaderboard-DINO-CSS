@@ -30,11 +30,15 @@ function doGet(e) {
     const profiles = getPublicProfiles_(spreadsheet);
     const publicRuns = getRuns_(spreadsheet)
       .filter(run => run.status === 'approved')
-      .map(run => ({
-        id: run.id, player: profiles[run.email] && profiles[run.email].nickname || run.player,
-        avatarUrl: profiles[run.email] && profiles[run.email].avatarUrl || '',
-        category: run.category, time: run.time, platform: run.platform, date: run.date, video: run.video
-      }));
+      .map(run => {
+        const profile = profiles[run.email];
+        const nickname = profile && profile.nickname || run.player;
+        return {
+          id: run.id, player: nickname, nickname: nickname,
+          avatarUrl: profile && profile.avatarUrl || '',
+          category: run.category, time: run.time, platform: run.platform, date: run.date, video: run.video
+        };
+      });
     return jsonOutput_({ runs: publicRuns });
   }
   if (action === 'twitchLive') {
@@ -575,8 +579,8 @@ function getPublicProfiles_(spreadsheet) {
 }
 
 function getPublicProfile_(spreadsheet, nickname) {
-  const requestedNickname = String(nickname || '').trim();
-  if (!/^[A-Za-z0-9_ ]{3,20}$/.test(requestedNickname)) return null;
+  const requestedNickname = String(nickname || '').trim().toLowerCase();
+  if (!/^[a-z0-9_ ]{3,20}$/.test(requestedNickname)) return null;
   const profiles = getPublicProfiles_(spreadsheet);
   const matchingEmails = Object.keys(profiles).filter(email =>
     profiles[email].nickname.toLowerCase() === requestedNickname
