@@ -138,6 +138,7 @@ dialog.addEventListener('click', event => { if (event.target === dialog) dialog.
 document.querySelectorAll('.category-tab').forEach(tab => tab.addEventListener('click', () => { selectedCategory = tab.dataset.category; render(); }));
 document.querySelector('#search').addEventListener('input', event => { searchQuery = event.target.value.trim().toLowerCase(); render(); });
 document.querySelector('#my-runs-button').addEventListener('click', loadMyRuns);
+document.querySelector('#edit-profile-button').addEventListener('click', openEditProfile);
 document.querySelector('#notifications-button').addEventListener('click', toggleNotifications);
 document.querySelector('#sign-out-button').addEventListener('click', signOut);
 document.querySelector('#refresh-pending').addEventListener('click', loadPendingRuns);
@@ -183,7 +184,7 @@ profileForm.addEventListener('submit', event => {
   const request = file ? readAvatarFile(file).then(save) : save('');
   request.then(result => {
     profileDialog.close();
-    profileForm.reset(); document.querySelector('#avatar-file-name').textContent = 'Sin foto seleccionada';
+    resetProfileForm();
     activateUser(result.user); loadNotifications();
     showToast(`Perfil listo, ${currentUser.nickname}`);
   }).catch(profileRequestError => {
@@ -194,7 +195,35 @@ profileForm.addEventListener('submit', event => {
 avatarFile.addEventListener('change', () => {
   document.querySelector('#avatar-file-name').textContent = avatarFile.files[0]?.name || 'Sin foto seleccionada';
 });
-profileDialog.addEventListener('cancel', event => event.preventDefault());
+profileDialog.querySelector('.profile-close-button').addEventListener('click', () => profileDialog.close());
+profileDialog.addEventListener('click', event => { if (event.target === profileDialog && currentUser && !currentUser.needsSetup) profileDialog.close(); });
+profileDialog.addEventListener('cancel', event => {
+  if (!currentUser || currentUser.needsSetup) event.preventDefault();
+});
+
+function openEditProfile() {
+  if (!idToken || !currentUser || currentUser.needsSetup) return;
+  profileError.hidden = true;
+  profileForm.elements.nickname.value = currentUser.nickname || '';
+  avatarFile.value = '';
+  document.querySelector('#avatar-file-name').textContent = currentUser.avatarUrl ? 'Foto actual · elige otra para reemplazarla' : 'Sin foto seleccionada';
+  document.querySelector('#profile-dialog-eyebrow').textContent = 'AJUSTES DE CUENTA';
+  document.querySelector('#profile-dialog-title').innerHTML = 'EDITA TU <span>PERFIL.</span>';
+  document.querySelector('#profile-dialog-intro').textContent = 'Actualiza tu nickname o cambia tu foto. Si no eliges otra imagen, se conserva la actual.';
+  document.querySelector('#profile-form [type="submit"]').textContent = 'GUARDAR CAMBIOS';
+  document.querySelector('.profile-close-button').hidden = false;
+  profileDialog.showModal();
+}
+
+function resetProfileForm() {
+  profileForm.reset();
+  document.querySelector('#avatar-file-name').textContent = 'Sin foto seleccionada';
+  document.querySelector('#profile-dialog-eyebrow').textContent = 'CONFIGURA TU PERFIL';
+  document.querySelector('#profile-dialog-title').innerHTML = 'ELIGE TU <span>NICKNAME.</span>';
+  document.querySelector('#profile-dialog-intro').textContent = 'Tu nickname aparecerá en el leaderboard y se asociará automáticamente a todas tus runs.';
+  document.querySelector('#profile-form [type="submit"]').innerHTML = 'GUARDAR PERFIL <span>↗</span>';
+  document.querySelector('.profile-close-button').hidden = true;
+}
 
 function readAvatarFile(file) {
   return new Promise((resolve, reject) => {

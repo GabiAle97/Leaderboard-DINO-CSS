@@ -35,6 +35,7 @@
         <div class="account-box" id="account-box" hidden>
           <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
           <span id="account-name"></span>
+          <button type="button" class="account-action" id="edit-profile-button">MI PERFIL</button>
           <button type="button" class="account-action" id="my-runs-button">MIS RUNS</button>
           <button type="button" class="account-action" id="notifications-button">AVISOS <span id="notification-count" hidden>0</span></button>
           <button type="button" class="account-action" id="sign-out-button">SALIR</button>
@@ -146,8 +147,8 @@
 
     <dialog id="profile-dialog" class="submit-dialog profile-dialog">
       <form id="profile-form" novalidate>
-        <div class="dialog-header"><div><div class="eyebrow"><i></i> CONFIGURA TU PERFIL</div><h2>ELIGE TU <span>NICKNAME.</span></h2></div></div>
-        <p class="dialog-intro">Tu nickname aparecerá en el leaderboard y se asociará automáticamente a todas tus runs.</p>
+        <div class="dialog-header"><div><div class="eyebrow"><i></i> <span id="profile-dialog-eyebrow">CONFIGURA TU PERFIL</span></div><h2 id="profile-dialog-title">ELIGE TU <span>NICKNAME.</span></h2></div><button type="button" class="close-button profile-close-button" aria-label="Cerrar perfil" hidden>×</button></div>
+        <p class="dialog-intro" id="profile-dialog-intro">Tu nickname aparecerá en el leaderboard y se asociará automáticamente a todas tus runs.</p>
         <label class="field">NICKNAME *<input name="nickname" minlength="3" maxlength="20" required autocomplete="nickname" placeholder="Ej. ReginaRunner" pattern="[A-Za-z0-9_ ]{3,20}" /></label>
         <label class="field profile-photo-field">FOTO DE PERFIL <span class="optional-label">OPCIONAL · PNG, JPG O WEBP · MÁX. 400 KB</span><input name="avatar" type="file" accept="image/png,image/jpeg,image/webp" /><span id="avatar-file-name">Sin foto seleccionada</span></label>
         <p class="profile-privacy">La foto se mostrará públicamente junto a tu nickname. Puedes dejarla vacía.</p>
