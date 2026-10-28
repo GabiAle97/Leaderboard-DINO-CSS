@@ -28,6 +28,10 @@ const tableBody = document.querySelector('#run-rows');
 const emptyState = document.querySelector('#empty-state');
 const dialog = document.querySelector('#submit-dialog');
 const form = document.querySelector('#submit-form');
+const profileDialog = document.querySelector('#profile-dialog');
+const profileForm = document.querySelector('#profile-form');
+const profileError = document.querySelector('#profile-error');
+const avatarFile = profileForm.elements.avatar;
 const error = document.querySelector('#form-error');
 const toast = document.querySelector('#toast');
 const dateField = form.elements.date;
@@ -59,7 +63,7 @@ function render() {
     rank.textContent = `#${String(index + 1).padStart(2, '0')}`;
     const player = document.createElement('td');
     const playerWrap = document.createElement('div'); playerWrap.className = 'player-cell';
-    const avatar = document.createElement('span'); avatar.className = 'player-avatar'; avatar.textContent = initials(run.player);
+    const avatar = createAvatar(run.player, run.avatarUrl);
     const name = document.createElement('span'); name.textContent = run.player;
     playerWrap.append(avatar, name); player.append(playerWrap);
     const time = document.createElement('td'); time.className = 'time-cell'; time.textContent = run.time;
@@ -78,13 +82,27 @@ function render() {
 function initials(value) {
   return value.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 }
+function createAvatar(name, imageUrl) {
+  const avatar = document.createElement('span'); avatar.className = 'player-avatar';
+  if (imageUrl && safeImageUrl(imageUrl)) {
+    const image = document.createElement('img'); image.src = safeImageUrl(imageUrl); image.alt = `Foto de ${name}`; image.loading = 'lazy';
+    image.addEventListener('error', () => { image.remove(); avatar.textContent = initials(name); }, { once: true });
+    avatar.append(image);
+  } else avatar.textContent = initials(name);
+  return avatar;
+}
+function safeImageUrl(value) {
+  try { const url = new URL(value); return url.protocol === 'https:' ? url.href : ''; }
+  catch { return ''; }
+}
 function safeVideoUrl(value) {
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.href : '#'; }
   catch { return '#'; }
 }
 function openDialog(category = selectedCategory) {
-  if (!idToken) { showToast('Inicia sesión con Google antes de enviar una run'); return; }
+  if (!idToken || !currentUser || currentUser.needsSetup) { showToast('Completa tu perfil antes de enviar una run'); return; }
   form.elements.category.value = category;
+  document.querySelector('#run-submitter-name').textContent = currentUser.nickname;
   error.hidden = true;
   if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
 }
@@ -133,13 +151,59 @@ form.addEventListener('submit', event => {
   if (!idToken) { error.textContent = 'Inicia sesión con Google para enviar una run.'; error.hidden = false; return; }
   if (!form.reportValidity()) return;
   const data = Object.fromEntries(new FormData(form));
-  const timePattern = /^(?:(\d{1,2}):)?([0-5]?\d):([0-5]\d)$/;
-  if (!timePattern.test(data.time)) { error.textContent = 'Usa el formato HH:MM:SS o MM:SS (por ejemplo, 00:42:18).'; error.hidden = false; form.elements.time.focus(); return; }
+  const hours = Number(data.hours);
+  const minutes = Number(data.minutes);
+  const seconds = Number(data.seconds);
+  if (!Number.isInteger(hours) || hours < 0 || hours > 99 || !Number.isInteger(minutes) || minutes < 0 || minutes > 59 || !Number.isInteger(seconds) || seconds < 0 || seconds > 59 || (hours === 0 && minutes === 0 && seconds === 0)) {
+    error.textContent = 'Ingresa un tiempo válido: horas de 0 a 99 y minutos/segundos de 0 a 59.';
+    error.hidden = false;
+    return;
+  }
+  const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   const url = safeVideoUrl(data.video);
   if (url === '#') { error.textContent = 'Introduce un enlace de video válido que empiece con http:// o https://.'; error.hidden = false; form.elements.video.focus(); return; }
-  const submission = { action: 'submitRun', idToken, player: data.player, category: data.category, time: data.time, platform: 'PC', date: data.date, video: url, notes: data.notes };
+  const submission = { action: 'submitRun', idToken, category: data.category, time, platform: 'PC', date: data.date, video: url, notes: data.notes };
   submitRun(submission);
 });
+
+profileForm.addEventListener('submit', event => {
+  event.preventDefault();
+  profileError.hidden = true;
+  if (!profileForm.reportValidity()) return;
+  const nickname = profileForm.elements.nickname.value.trim();
+  const file = avatarFile.files[0];
+  if (file && file.size > 400 * 1024) {
+    profileError.textContent = 'La foto no puede superar 400 KB.'; profileError.hidden = false; return;
+  }
+  if (file && !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    profileError.textContent = 'Elige una imagen PNG, JPG o WEBP.'; profileError.hidden = false; return;
+  }
+  profileForm.querySelector('[type="submit"]').disabled = true;
+  const save = avatarData => apiPost({ action: 'profile', idToken, nickname, avatarData });
+  const request = file ? readAvatarFile(file).then(save) : save('');
+  request.then(result => {
+    profileDialog.close();
+    profileForm.reset(); document.querySelector('#avatar-file-name').textContent = 'Sin foto seleccionada';
+    activateUser(result.user); loadNotifications();
+    showToast(`Perfil listo, ${currentUser.nickname}`);
+  }).catch(profileRequestError => {
+    profileError.textContent = profileRequestError.message; profileError.hidden = false;
+  }).finally(() => { profileForm.querySelector('[type="submit"]').disabled = false; });
+});
+
+avatarFile.addEventListener('change', () => {
+  document.querySelector('#avatar-file-name').textContent = avatarFile.files[0]?.name || 'Sin foto seleccionada';
+});
+profileDialog.addEventListener('cancel', event => event.preventDefault());
+
+function readAvatarFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo de imagen.'));
+    reader.readAsDataURL(file);
+  });
+}
 
 async function submitRun(submission) {
   const submitButton = form.querySelector('[type="submit"]');
@@ -249,10 +313,18 @@ async function handleGoogleCredentialResponse(response) {
 
 function activateUser(user) {
   currentUser = user;
-  document.querySelector('#account-name').textContent = `${currentUser.name}${currentUser.role === 'moderator' ? ' · MOD' : ''}`;
-  document.querySelector('#account-box').hidden = false;
   document.querySelector('#google-signin-button').hidden = true;
   document.querySelector('#auth-config-notice').hidden = true;
+  if (currentUser.needsSetup || !currentUser.nickname) {
+    document.querySelector('#account-box').hidden = true;
+    profileError.hidden = true;
+    if (!profileDialog.open) profileDialog.showModal();
+    return;
+  }
+  const accountAvatar = document.querySelector('#account-avatar');
+  accountAvatar.replaceChildren(createAvatar(currentUser.nickname, currentUser.avatarUrl).firstChild || document.createTextNode(initials(currentUser.nickname)));
+  document.querySelector('#account-name').textContent = `${currentUser.nickname}${currentUser.role === 'moderator' ? ' · MOD' : ''}`;
+  document.querySelector('#account-box').hidden = false;
   if (currentUser.role === 'moderator') { moderationPanel.hidden = false; loadPendingRuns(); }
 }
 
@@ -281,6 +353,7 @@ function signOut() {
   moderationPanel.hidden = true;
   myRunsSection.hidden = true;
   notificationsSection.hidden = true;
+  if (profileDialog.open) profileDialog.close();
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   showToast('Sesión cerrada en este navegador');
 }
@@ -371,7 +444,7 @@ function renderRunCards(container, list, showOwner) {
     const details = document.createElement('span'); details.textContent = `${run.platform || 'PC'} · ${formatDate(run.date)}${showOwner ? ` · ${run.status}` : ` · ${run.email}`}`;
     const link = document.createElement('a'); link.href = safeVideoUrl(run.video); link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'ABRIR VIDEO ↗'; link.className = 'video-link';
     info.append(title, details, link);
-    card.append(info);
+    card.append(createAvatar(run.player, run.avatarUrl), info);
     if (!showOwner && run.status === 'pending') {
       const actions = document.createElement('div'); actions.className = 'review-actions';
       [['approved', 'APROBAR'], ['rejected', 'RECHAZAR']].forEach(([status, label]) => {

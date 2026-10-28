@@ -8,7 +8,7 @@ const RUNS_SHEET_NAME = 'Dino Crisis Runs';
 const USERS_SHEET_NAME = 'Usuarios';
 const NOTIFICATIONS_SHEET_NAME = 'Notificaciones';
 const RUN_HEADERS = ['ID', 'Fecha de envío', 'Email', 'Jugador', 'Categoría', 'Tiempo', 'Plataforma', 'Fecha de run', 'Video', 'Notas', 'Estado', 'Revisado por', 'Fecha de revisión', 'Nota de revisión'];
-const USER_HEADERS = ['Email', 'Nombre de Google', 'Rol', 'Fecha de registro'];
+const USER_HEADERS = ['Email', 'Nombre de Google', 'Rol', 'Fecha de registro', 'Nickname', 'Foto de perfil'];
 const NOTIFICATION_HEADERS = ['ID', 'Email', 'Run ID', 'Tipo', 'Mensaje', 'Fecha', 'Leída'];
 const RUN_CATEGORIES = ['ANY%', 'BEST ENDING', 'SEGMENTED%'];
 
@@ -20,9 +20,14 @@ function doGet(e) {
     return jsonOutput_({ messages: getPublicMessages_(spreadsheet) });
   }
   if (action === 'leaderboard') {
+    const profiles = getPublicProfiles_(spreadsheet);
     const publicRuns = getRuns_(spreadsheet)
       .filter(run => run.status === 'approved')
-      .map(run => ({ id: run.id, player: run.player, category: run.category, time: run.time, platform: run.platform, date: run.date, video: run.video }));
+      .map(run => ({
+        id: run.id, player: profiles[run.email] && profiles[run.email].nickname || run.player,
+        avatarUrl: profiles[run.email] && profiles[run.email].avatarUrl || '',
+        category: run.category, time: run.time, platform: run.platform, date: run.date, video: run.video
+      }));
     return jsonOutput_({ runs: publicRuns });
   }
 
@@ -54,7 +59,12 @@ function doPost(e) {
         errorStage = 'validar el token de Google';
         const identity = verifyGoogleIdentity_(payload.idToken);
         errorStage = 'crear o consultar el perfil';
-        return jsonOutput_({ ok: true, user: publicUser_(ensureUser_(spreadsheet, identity)) });
+        const user = ensureUser_(spreadsheet, identity);
+        if (payload.nickname !== undefined) {
+          errorStage = 'guardar nickname y foto de perfil';
+          return jsonOutput_({ ok: true, user: publicUser_(saveProfile_(spreadsheet, identity, payload)) });
+        }
+        return jsonOutput_({ ok: true, user: publicUser_(user) });
       }
       case 'submitRun': {
         errorStage = 'validar el token de Google';
@@ -67,8 +77,9 @@ function doPost(e) {
         errorStage = 'validar el token de Google';
         const identity = verifyGoogleIdentity_(payload.idToken);
         errorStage = 'leer tus runs';
-        ensureUser_(spreadsheet, identity);
-        const runs = getRuns_(spreadsheet).filter(run => run.email === identity.email);
+        const user = ensureUser_(spreadsheet, identity);
+        const runs = getRuns_(spreadsheet).filter(run => run.email === identity.email)
+          .map(run => Object.assign({}, run, { player: user.nickname || run.player, avatarUrl: user.avatarUrl }));
         return jsonOutput_({ ok: true, runs: runs });
       }
       case 'notifications': {
@@ -91,7 +102,9 @@ function doPost(e) {
         errorStage = 'comprobar permisos de moderador';
         const user = ensureUser_(spreadsheet, identity);
         requireModerator_(user);
-        const runs = getRuns_(spreadsheet).filter(run => run.status === 'pending');
+        const profiles = getPublicProfiles_(spreadsheet);
+        const runs = getRuns_(spreadsheet).filter(run => run.status === 'pending')
+          .map(run => Object.assign({}, run, { avatarUrl: profiles[run.email] && profiles[run.email].avatarUrl || '' }));
         return jsonOutput_({ ok: true, runs: runs });
       }
       case 'reviewRun': {
@@ -133,13 +146,14 @@ function verifyGoogleIdentity_(idToken) {
   const email = String(claims.email || '').trim().toLowerCase();
   const emailVerified = claims.email_verified === true || claims.email_verified === 'true';
   if (!tokenValid || !email || !emailVerified || !claims.sub) throw publicError_('No se pudo verificar la cuenta de Google.');
-  return { email: email, name: String(claims.name || email.split('@')[0]).slice(0, 80), sub: String(claims.sub) };
+  return { email: email, name: String(claims.name || email.split('@')[0]).slice(0, 80), picture: String(claims.picture || ''), sub: String(claims.sub) };
 }
 
 // Ejecuta esta función manualmente una vez desde el editor para conceder al
 // propietario los permisos de hoja y de solicitudes externas (UrlFetchApp).
 function authorizeRunArchive() {
   SpreadsheetApp.getActiveSpreadsheet().getId();
+  DriveApp.getRootFolder().getId();
   UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=authorization-check', {
     method: 'get', muteHttpExceptions: true
   });
@@ -147,10 +161,11 @@ function authorizeRunArchive() {
 
 function ensureUser_(spreadsheet, identity) {
   const sheet = ensureSheet_(spreadsheet, USERS_SHEET_NAME, USER_HEADERS);
+  ensureUserHeaders_(sheet);
   const rows = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0] || '').trim().toLowerCase() === identity.email) {
-      return { email: identity.email, name: String(rows[i][1] || identity.name), role: String(rows[i][2] || 'player').toLowerCase() };
+      return userFromRow_(rows[i], identity);
     }
   }
   const lock = LockService.getScriptLock();
@@ -160,18 +175,91 @@ function ensureUser_(spreadsheet, identity) {
     const latest = sheet.getDataRange().getValues();
     for (let i = 1; i < latest.length; i++) {
       if (String(latest[i][0] || '').trim().toLowerCase() === identity.email) {
-        return { email: identity.email, name: String(latest[i][1] || identity.name), role: String(latest[i][2] || 'player').toLowerCase() };
+        return userFromRow_(latest[i], identity);
       }
     }
-    sheet.appendRow([safeSheetText_(identity.email), safeSheetText_(identity.name), 'player', new Date()]);
+    sheet.appendRow([safeSheetText_(identity.email), safeSheetText_(identity.name), 'player', new Date(), '', '']);
   } finally {
     lock.releaseLock();
   }
-  return { email: identity.email, name: identity.name, role: 'player' };
+  return { email: identity.email, name: identity.name, role: 'player', nickname: '', avatarUrl: '', needsSetup: true };
 }
 
 function publicUser_(user) {
-  return { email: user.email, name: user.name, role: user.role };
+  return { name: user.nickname || user.name, nickname: user.nickname, avatarUrl: user.avatarUrl, role: user.role, needsSetup: user.needsSetup };
+}
+
+function userFromRow_(row, identity) {
+  const nickname = cleanText_(row[4], 20);
+  return {
+    email: identity.email,
+    name: String(row[1] || identity.name),
+    role: String(row[2] || 'player').toLowerCase(),
+    nickname: nickname,
+    avatarUrl: validHttpsUrl_(row[5]) || identity.picture || '',
+    needsSetup: !nickname
+  };
+}
+
+function ensureUserHeaders_(sheet) {
+  sheet.getRange(1, 1, 1, USER_HEADERS.length).setValues([USER_HEADERS]);
+}
+
+function saveProfile_(spreadsheet, identity, payload) {
+  const user = ensureUser_(spreadsheet, identity);
+  const nickname = cleanText_(payload.nickname, 20);
+  if (!/^[A-Za-z0-9_ ]{3,20}$/.test(nickname)) {
+    throw publicError_('El nickname debe tener entre 3 y 20 caracteres: letras, números, espacios o guion bajo.');
+  }
+  const sheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
+  const rows = sheet.getDataRange().getValues();
+  const currentRow = rows.findIndex((row, index) => index > 0 && String(row[0] || '').trim().toLowerCase() === identity.email);
+  if (currentRow < 1) throw publicError_('No se encontró el perfil de usuario.');
+  const duplicate = rows.some((row, index) => index > 0 && index !== currentRow && String(row[4] || '').trim().toLowerCase() === nickname.toLowerCase());
+  if (duplicate) throw publicError_('Ese nickname ya está en uso. Elige otro.');
+
+  const existingAvatar = validHttpsUrl_(rows[currentRow][5]);
+  const avatarData = String(payload.avatarData || '');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  let avatarUrl;
+  try {
+    const latestRows = sheet.getDataRange().getValues();
+    const duplicateNow = latestRows.some((row, index) => index > 0 && index !== currentRow && String(row[4] || '').trim().toLowerCase() === nickname.toLowerCase());
+    if (duplicateNow) throw publicError_('Ese nickname ya está en uso. Elige otro.');
+    avatarUrl = avatarData ? saveAvatar_(identity, avatarData) : (existingAvatar || identity.picture || '');
+    sheet.getRange(currentRow + 1, 5, 1, 2).setValues([[safeSheetText_(nickname), avatarUrl]]);
+  } finally {
+    lock.releaseLock();
+  }
+  return { email: identity.email, name: String(rows[currentRow][1] || identity.name), role: String(rows[currentRow][2] || 'player').toLowerCase(), nickname: nickname, avatarUrl: avatarUrl, needsSetup: false };
+}
+
+function saveAvatar_(identity, dataUrl) {
+  const match = dataUrl.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) throw publicError_('La foto debe ser PNG, JPG o WEBP.');
+  if (match[2].length > 550000) throw publicError_('La foto no puede superar 400 KB.');
+  const bytes = Utilities.base64Decode(match[2]);
+  if (bytes.length > 400 * 1024) throw publicError_('La foto no puede superar 400 KB.');
+  if (!isImageSignatureValid_(bytes, match[1])) throw publicError_('El archivo no parece ser una imagen válida.');
+  const extension = match[1] === 'jpeg' ? 'jpg' : match[1];
+  const blob = Utilities.newBlob(bytes, 'image/' + match[1], 'avatar-' + identity.sub + '.' + extension);
+  let file;
+  try {
+    file = DriveApp.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (error) {
+    if (file) file.setTrashed(true);
+    throw publicError_('No se pudo guardar la foto. Verifica los permisos de Google Drive del Apps Script.');
+  }
+  return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+}
+
+function isImageSignatureValid_(bytes, type) {
+  if (type === 'png') return bytes.length > 8 && bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71;
+  if (type === 'jpeg') return bytes.length > 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+  if (type === 'webp') return bytes.length > 12 && String.fromCharCode.apply(null, bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode.apply(null, bytes.slice(8, 12)) === 'WEBP';
+  return false;
 }
 
 function requireModerator_(user) {
@@ -179,7 +267,7 @@ function requireModerator_(user) {
 }
 
 function submitRun_(spreadsheet, identity, user, payload) {
-  const player = cleanText_(payload.player, 32);
+  const player = cleanText_(user.nickname, 20);
   const category = String(payload.category || '').trim().toUpperCase();
   const rawTime = String(payload.time || '').trim();
   const timePattern = /^(?:(\d{1,2}):)?([0-5]?\d):([0-5]\d)$/;
@@ -188,7 +276,7 @@ function submitRun_(spreadsheet, identity, user, payload) {
   const video = validHttpsUrl_(payload.video);
   const notes = cleanText_(payload.notes, 300);
 
-  if (!player || RUN_CATEGORIES.indexOf(category) === -1 || !timeMatch || !isValidRunDate_(runDate) || !video) {
+  if (!player || user.needsSetup || RUN_CATEGORIES.indexOf(category) === -1 || !timeMatch || !isValidRunDate_(runDate) || !video) {
     throw publicError_('Revisa los campos obligatorios de la run.');
   }
   const time = [timeMatch[1] || '0', timeMatch[2], timeMatch[3]]
@@ -284,6 +372,17 @@ function getRuns_(spreadsheet) {
     category: row[4], time: row[5], platform: row[6] || 'PC', date: row[7], video: row[8],
     notes: row[9], status: row[10], reviewedBy: row[11], reviewedAt: row[12], reviewNote: row[13]
   }));
+}
+
+function getPublicProfiles_(spreadsheet) {
+  const sheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
+  const profiles = {};
+  if (!sheet || sheet.getLastRow() < 2) return profiles;
+  sheet.getDataRange().getDisplayValues().slice(1).forEach(row => {
+    const email = String(row[0] || '').trim().toLowerCase();
+    if (email) profiles[email] = { nickname: cleanText_(row[4], 20), avatarUrl: validHttpsUrl_(row[5]) };
+  });
+  return profiles;
 }
 
 function ensureSheet_(spreadsheet, name, headers) {

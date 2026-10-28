@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="auth.css" />
     <link rel="stylesheet" href="notifications.css" />
     <link rel="stylesheet" href="blue-theme.css" />
+    <link rel="stylesheet" href="profile.css" />
+    <link rel="stylesheet" href="time-inputs.css" />
   </head>
   <body>
     <div class="scanlines" aria-hidden="true"></div>
@@ -29,6 +31,7 @@
         <div id="google-signin-button"></div>
         <span id="auth-config-notice">LOGIN GOOGLE PENDIENTE DE CONFIGURACIÓN</span>
         <div class="account-box" id="account-box" hidden>
+          <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
           <span id="account-name"></span>
           <button type="button" class="account-action" id="my-runs-button">MIS RUNS</button>
           <button type="button" class="account-action" id="notifications-button">AVISOS <span id="notification-count" hidden>0</span></button>
@@ -126,10 +129,10 @@
       <form id="submit-form" method="dialog" novalidate>
         <div class="dialog-header"><div><div class="eyebrow"><i></i> NUEVA SUBMISSION</div><h2>REGISTRA TU <span>RUN.</span></h2></div><button type="button" class="close-button" aria-label="Cerrar">×</button></div>
         <p class="dialog-intro">Completa los datos de tu run. Los campos marcados con * son obligatorios.</p>
+        <p class="run-submitter">JUGADOR: <strong id="run-submitter-name"></strong></p>
         <div class="form-grid">
-          <label class="field field-wide">NOMBRE DE JUGADOR *<input name="player" maxlength="32" required placeholder="Tu nombre o alias" autocomplete="nickname" /></label>
           <label class="field">CATEGORÍA *<select name="category" required><option>ANY%</option><option>BEST ENDING</option><option>SEGMENTED%</option></select></label>
-          <label class="field">TIEMPO (HH:MM:SS) *<input name="time" required placeholder="00:42:18" inputmode="numeric" pattern="(?:\d{1,2}:)?[0-5]?\d:[0-5]\d" /></label>
+          <fieldset class="field field-wide time-fieldset"><legend>TIEMPO DE LA RUN *</legend><div class="time-inputs"><label>HORAS<input name="hours" type="number" min="0" max="99" value="0" required inputmode="numeric" aria-label="Horas" /></label><span aria-hidden="true">:</span><label>MINUTOS<input name="minutes" type="number" min="0" max="59" value="0" required inputmode="numeric" aria-label="Minutos" /></label><span aria-hidden="true">:</span><label>SEGUNDOS<input name="seconds" type="number" min="0" max="59" value="0" required inputmode="numeric" aria-label="Segundos" /></label></div><small>Usa un número entre 0 y 59 para minutos y segundos.</small></fieldset>
           <label class="field">PLATAFORMA<select name="platform" required><option selected>PC</option></select></label>
           <label class="field">FECHA DE LA RUN *<input name="date" type="date" required /></label>
           <label class="field field-wide">VIDEO DE LA RUN *<input name="video" type="url" required placeholder="https://youtu.be/..." /></label>
@@ -137,6 +140,18 @@
         </div>
         <p class="form-error" id="form-error" role="alert" hidden></p>
         <div class="dialog-footer"><span>Tu submission se guardará en la hoja como pendiente de verificación.</span><button class="button button-primary" type="submit">GUARDAR SUBMISSION <span>↗</span></button></div>
+      </form>
+    </dialog>
+
+    <dialog id="profile-dialog" class="submit-dialog profile-dialog">
+      <form id="profile-form" novalidate>
+        <div class="dialog-header"><div><div class="eyebrow"><i></i> CONFIGURA TU PERFIL</div><h2>ELIGE TU <span>NICKNAME.</span></h2></div></div>
+        <p class="dialog-intro">Tu nickname aparecerá en el leaderboard y se asociará automáticamente a todas tus runs.</p>
+        <label class="field">NICKNAME *<input name="nickname" minlength="3" maxlength="20" required autocomplete="nickname" placeholder="Ej. ReginaRunner" pattern="[A-Za-z0-9_ ]{3,20}" /></label>
+        <label class="field profile-photo-field">FOTO DE PERFIL <span class="optional-label">OPCIONAL · PNG, JPG O WEBP · MÁX. 400 KB</span><input name="avatar" type="file" accept="image/png,image/jpeg,image/webp" /><span id="avatar-file-name">Sin foto seleccionada</span></label>
+        <p class="profile-privacy">La foto se mostrará públicamente junto a tu nickname. Puedes dejarla vacía.</p>
+        <p class="form-error" id="profile-error" role="alert" hidden></p>
+        <div class="dialog-footer"><span>El nickname debe ser único.</span><button class="button button-primary" type="submit">GUARDAR PERFIL <span>↗</span></button></div>
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
