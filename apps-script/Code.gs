@@ -245,12 +245,22 @@ function saveAvatar_(identity, dataUrl) {
   const extension = match[1] === 'jpeg' ? 'jpg' : match[1];
   const blob = Utilities.newBlob(bytes, 'image/' + match[1], 'avatar-' + identity.sub + '.' + extension);
   let file;
+  let avatarStage = 'crear el archivo en Drive';
   try {
     file = DriveApp.createFile(blob);
+    avatarStage = 'habilitar el acceso público por enlace';
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   } catch (error) {
-    if (file) file.setTrashed(true);
-    throw publicError_('No se pudo guardar la foto. Verifica los permisos de Google Drive del Apps Script.');
+    const detail = String(error && error.message || error);
+    console.error('Avatar upload failed during ' + avatarStage + ': ' + detail);
+    if (file) {
+      try { file.setTrashed(true); }
+      catch (cleanupError) { console.error('Could not remove incomplete avatar: ' + cleanupError); }
+    }
+    if (avatarStage === 'crear el archivo en Drive') {
+      throw publicError_('Drive no pudo crear el archivo. Revisa en Apps Script que authorizeRunArchive() se haya ejecutado con la cuenta propietaria y que el despliegue use esa cuenta.');
+    }
+    throw publicError_('Drive creó la foto, pero no permite compartirla con “Cualquier persona con el enlace”. Revisa las restricciones para compartir de la cuenta/organización. El nickname se puede guardar quitando la foto.');
   }
   return 'https://drive.google.com/uc?export=view&id=' + file.getId();
 }
