@@ -256,9 +256,11 @@ function saveAvatar_(identity, dataUrl) {
 }
 
 function isImageSignatureValid_(bytes, type) {
-  if (type === 'png') return bytes.length > 8 && bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71;
-  if (type === 'jpeg') return bytes.length > 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-  if (type === 'webp') return bytes.length > 12 && String.fromCharCode.apply(null, bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode.apply(null, bytes.slice(8, 12)) === 'WEBP';
+  // Apps Script devuelve bytes con signo; normalizarlos a 0–255 antes de comparar firmas.
+  const byte = index => bytes[index] & 0xFF;
+  if (type === 'png') return bytes.length > 8 && byte(0) === 137 && byte(1) === 80 && byte(2) === 78 && byte(3) === 71 && byte(4) === 13 && byte(5) === 10 && byte(6) === 26 && byte(7) === 10;
+  if (type === 'jpeg') return bytes.length > 3 && byte(0) === 255 && byte(1) === 216 && byte(2) === 255;
+  if (type === 'webp') return bytes.length > 12 && String.fromCharCode(byte(0), byte(1), byte(2), byte(3)) === 'RIFF' && String.fromCharCode(byte(8), byte(9), byte(10), byte(11)) === 'WEBP';
   return false;
 }
 
