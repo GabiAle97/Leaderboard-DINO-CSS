@@ -32,6 +32,8 @@ const emptyState = document.querySelector('#empty-state');
 const dialog = document.querySelector('#submit-dialog');
 const form = document.querySelector('#submit-form');
 const profileDialog = document.querySelector('#profile-dialog');
+const publicProfileDialog = document.querySelector('#public-profile-dialog');
+const publicProfileContent = document.querySelector('#public-profile-content');
 const profileForm = document.querySelector('#profile-form');
 const profileError = document.querySelector('#profile-error');
 const avatarFile = profileForm.elements.avatar;
@@ -43,6 +45,12 @@ const pendingRuns = document.querySelector('#pending-runs');
 const myRunsSection = document.querySelector('#my-runs-section');
 const notificationsSection = document.querySelector('#notifications-section');
 const notificationsList = document.querySelector('#notifications-list');
+const resourceForm = document.querySelector('#resource-form');
+const resourceDescription = resourceForm.elements.description;
+const resourceMarkdownTools = document.querySelector('#resource-markdown-tools');
+const resourceMarkdownPreview = document.querySelector('#resource-markdown-preview');
+const resourcePreviewTab = document.querySelector('#resource-preview-tab');
+const MAX_RESOURCE_MARKDOWN_LENGTH = 10000;
 dateField.max = new Date().toISOString().slice(0, 10);
 dateField.value = dateField.max;
 function secondsFromTime(value) {
@@ -67,7 +75,14 @@ function render() {
     const player = document.createElement('td');
     const playerWrap = document.createElement('div'); playerWrap.className = 'player-cell';
     const avatar = createAvatar(run.player, run.avatarUrl);
-    const name = document.createElement('span'); name.textContent = run.player;
+    const name = document.createElement(run.demo ? 'span' : 'button');
+    name.textContent = run.player;
+    if (!run.demo) {
+      name.type = 'button';
+      name.className = 'player-profile-link';
+      name.setAttribute('aria-label', `Ver perfil público de ${run.player}`);
+      name.addEventListener('click', () => openPublicProfile(run.player));
+    }
     playerWrap.append(avatar, name); player.append(playerWrap);
     const time = document.createElement('td'); time.className = 'time-cell'; time.textContent = run.time;
     const platform = document.createElement('td'); const tag = document.createElement('span'); tag.className = 'platform-tag'; tag.textContent = run.platform; platform.append(tag);
@@ -101,6 +116,80 @@ function safeImageUrl(value) {
 function safeVideoUrl(value) {
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.href : '#'; }
   catch { return '#'; }
+}
+async function openPublicProfile(nickname) {
+  publicProfileContent.textContent = 'Cargando perfil…';
+  publicProfileContent.classList.remove('profile-load-error');
+  publicProfileDialog.showModal();
+  if (!SCRIPT_URL) {
+    showPublicProfileError('Los perfiles estarán disponibles cuando se configure Apps Script.');
+    return;
+  }
+  try {
+    const endpoint = new URL(SCRIPT_URL);
+    endpoint.searchParams.set('action', 'publicProfile');
+    endpoint.searchParams.set('nickname', nickname);
+    endpoint.searchParams.set('t', String(Date.now()));
+    const response = await fetch(endpoint, { method: 'GET', mode: 'cors', cache: 'no-store' });
+    if (!response.ok) throw new Error('No se pudo consultar el perfil. Inténtalo de nuevo más tarde.');
+    const payload = await response.json();
+    if (!Object.prototype.hasOwnProperty.call(payload, 'profile')) {
+      throw new Error('Actualiza el despliegue de Apps Script para habilitar los perfiles públicos.');
+    }
+    if (!payload.profile) throw new Error('No se encontró un perfil público con ese nickname.');
+    renderPublicProfile(payload.profile);
+  } catch (requestError) {
+    showPublicProfileError(requestError.message || 'No se pudo cargar el perfil.');
+  }
+}
+
+function showPublicProfileError(message) {
+  publicProfileContent.replaceChildren();
+  publicProfileContent.classList.add('profile-load-error');
+  publicProfileContent.textContent = message;
+}
+
+function renderPublicProfile(profile) {
+  publicProfileContent.replaceChildren();
+  publicProfileContent.classList.remove('profile-load-error');
+  const runs = Array.isArray(profile.runs) ? profile.runs : [];
+  const heading = document.createElement('div'); heading.className = 'public-profile-heading';
+  heading.append(createAvatar(profile.nickname, profile.avatarUrl));
+  const identity = document.createElement('div');
+  const nickname = document.createElement('h3'); nickname.textContent = profile.nickname;
+  const runCount = document.createElement('p');
+  runCount.textContent = `${runs.length} ${runs.length === 1 ? 'run aprobada' : 'runs aprobadas'}`;
+  identity.append(nickname, runCount);
+  heading.append(identity);
+  if (/^[a-z0-9_]{1,25}$/i.test(profile.twitchLogin || '')) {
+    const twitchLink = document.createElement('a');
+    twitchLink.className = 'button button-outline public-profile-twitch';
+    twitchLink.href = `https://www.twitch.tv/${encodeURIComponent(profile.twitchLogin)}`;
+    twitchLink.target = '_blank'; twitchLink.rel = 'noopener noreferrer';
+    twitchLink.textContent = 'TWITCH ↗';
+    heading.append(twitchLink);
+  }
+  publicProfileContent.append(heading);
+
+  const runList = document.createElement('div'); runList.className = 'public-profile-runs';
+  if (!runs.length) {
+    const empty = document.createElement('p'); empty.className = 'public-profile-empty';
+    empty.textContent = 'Este usuario todavía no tiene runs aprobadas.';
+    runList.append(empty);
+  } else {
+    runs.forEach(run => {
+      const card = document.createElement('article'); card.className = 'public-profile-run';
+      const category = document.createElement('span'); category.textContent = run.category;
+      const time = document.createElement('strong'); time.textContent = run.time;
+      const date = document.createElement('time'); date.textContent = formatDate(run.date);
+      const video = document.createElement('a'); video.className = 'video-link';
+      video.href = safeVideoUrl(run.video); video.target = '_blank'; video.rel = 'noopener noreferrer';
+      video.textContent = 'VER RUN ↗';
+      card.append(category, time, date, video);
+      runList.append(card);
+    });
+  }
+  publicProfileContent.append(runList);
 }
 function openDialog(category = selectedCategory) {
   if (!idToken || !currentUser || currentUser.needsSetup) { showToast('Completa tu perfil antes de enviar una run'); return; }
@@ -180,9 +269,17 @@ document.querySelector('#refresh-resources').addEventListener('click', loadResou
 document.querySelector('.resource-close').addEventListener('click', () => document.querySelector('#resource-dialog').close());
 document.querySelector('#resource-dialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
 document.querySelector('#resource-form').addEventListener('submit', submitResource);
+resourceForm.elements.category.addEventListener('change', updateResourceFields);
+document.querySelector('#resource-edit-tab').addEventListener('click', () => setResourceEditorMode('edit'));
+resourcePreviewTab.addEventListener('click', () => setResourceEditorMode('preview'));
+resourceDescription.addEventListener('input', () => {
+  if (resourcePreviewTab.getAttribute('aria-selected') === 'true') renderMarkdownPreview();
+});
 document.querySelector('#search').addEventListener('input', event => { searchQuery = event.target.value.trim().toLowerCase(); render(); });
 document.querySelector('#my-runs-button').addEventListener('click', loadMyRuns);
 document.querySelector('#edit-profile-button').addEventListener('click', openEditProfile);
+document.querySelector('.public-profile-close').addEventListener('click', () => publicProfileDialog.close());
+publicProfileDialog.addEventListener('click', event => { if (event.target === publicProfileDialog) publicProfileDialog.close(); });
 document.querySelector('#notifications-button').addEventListener('click', toggleNotifications);
 document.querySelector('#sign-out-button').addEventListener('click', signOut);
 document.querySelector('#refresh-pending').addEventListener('click', loadPendingRuns);
@@ -451,15 +548,150 @@ function renderResources() {
     const category = document.createElement('span'); category.className = `resource-card-category resource-${resource.category.toLowerCase()}`;
     category.textContent = resourceCategoryLabel(resource.category);
     const title = document.createElement('h2'); title.textContent = resource.title;
-    const description = document.createElement('p'); description.textContent = resource.description;
-    const link = document.createElement('a'); link.className = 'button button-primary resource-open';
-    link.href = safeHttpsUrl(resource.url); link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'ABRIR RECURSO ↗';
+    const body = resource.category === 'MOD'
+      ? document.createElement('p')
+      : document.createElement('div');
+    body.className = resource.category === 'MOD' ? '' : 'resource-markdown';
+    if (resource.category === 'MOD') body.textContent = resource.description;
+    else body.append(renderMarkdown(resource.description));
     const cardHeader = document.createElement('div'); cardHeader.className = 'resource-card-header';
     const index = document.createElement('span'); index.className = 'resource-index'; index.textContent = String(resources.indexOf(resource) + 1).padStart(2, '0');
     cardHeader.append(category, index);
-    card.append(cardHeader, title, description, link);
+    card.append(cardHeader, title, body);
+    if (safeHttpsUrl(resource.url) !== '#') {
+      const link = document.createElement('a'); link.className = 'button button-primary resource-open';
+      link.href = safeHttpsUrl(resource.url); link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'ABRIR ENLACE ↗';
+      card.append(link);
+    }
     container.append(card);
   });
+}
+
+function renderMarkdown(markdown) {
+  const fragment = document.createDocumentFragment();
+  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (!line.trim()) { index++; continue; }
+    if (/^\s*```/.test(line)) {
+      const codeLines = [];
+      index++;
+      while (index < lines.length && !/^\s*```/.test(lines[index])) codeLines.push(lines[index++]);
+      if (index < lines.length) index++;
+      const pre = document.createElement('pre');
+      const code = document.createElement('code');
+      code.textContent = codeLines.join('\n');
+      pre.append(code); fragment.append(pre);
+      continue;
+    }
+    const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*$/);
+    if (heading) {
+      const element = document.createElement(`h${heading[1].length}`);
+      appendMarkdownInline(element, heading[2]);
+      fragment.append(element); index++; continue;
+    }
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      fragment.append(document.createElement('hr')); index++; continue;
+    }
+    if (line.includes('|') && index + 1 < lines.length
+      && /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[index + 1])) {
+      const headers = splitMarkdownTableRow(line);
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      headers.forEach(value => {
+        const cell = document.createElement('th');
+        appendMarkdownInline(cell, value);
+        headerRow.append(cell);
+      });
+      thead.append(headerRow);
+      table.append(thead);
+      index += 2;
+      const tbody = document.createElement('tbody');
+      while (index < lines.length && lines[index].includes('|')) {
+        const row = document.createElement('tr');
+        splitMarkdownTableRow(lines[index++]).forEach(value => {
+          const cell = document.createElement('td');
+          appendMarkdownInline(cell, value);
+          row.append(cell);
+        });
+        tbody.append(row);
+      }
+      table.append(tbody); fragment.append(table); continue;
+    }
+    if (/^\s*>\s?/.test(line)) {
+      const quoteLines = [];
+      while (index < lines.length && /^\s*>\s?/.test(lines[index])) quoteLines.push(lines[index++].replace(/^\s*>\s?/, ''));
+      const quote = document.createElement('blockquote');
+      quote.append(renderMarkdown(quoteLines.join('\n')));
+      fragment.append(quote); continue;
+    }
+    const listMatch = line.match(/^\s*(?:[-+*]\s+|\d+[.)]\s+)/);
+    if (listMatch) {
+      const ordered = /^\s*\d/.test(line);
+      const list = document.createElement(ordered ? 'ol' : 'ul');
+      while (index < lines.length) {
+        const item = lines[index].match(/^\s*(?:[-+*]\s+|\d+[.)]\s+)(.+)$/);
+        if (!item || /^\s*\d/.test(lines[index]) !== ordered) break;
+        const entry = document.createElement('li');
+        appendMarkdownInline(entry, item[1]);
+        list.append(entry); index++;
+      }
+      fragment.append(list); continue;
+    }
+    const paragraphLines = [];
+    while (index < lines.length && lines[index].trim()
+      && !/^\s*```/.test(lines[index])
+      && !/^(?:#{1,6}\s|>\s?)/.test(lines[index])
+      && !/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(lines[index])
+      && !/^\s*(?:[-+*]\s+|\d+[.)]\s+)/.test(lines[index])) {
+      paragraphLines.push(lines[index++]);
+    }
+    const paragraph = document.createElement('p');
+    appendMarkdownInline(paragraph, paragraphLines.join('\n'));
+    fragment.append(paragraph);
+  }
+  return fragment;
+}
+
+function splitMarkdownTableRow(line) {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
+}
+
+function appendMarkdownInline(parent, text) {
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|\[[^\]]+\]\([^)]+\))/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = pattern.exec(text))) {
+    parent.append(document.createTextNode(text.slice(lastIndex, match.index)));
+    const token = match[0];
+    if (token[0] === '[') {
+      const linkParts = token.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
+      const url = linkParts && safeMarkdownUrl(linkParts[2]);
+      if (url) {
+        const link = document.createElement('a');
+        link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+        link.textContent = linkParts[1]; parent.append(link);
+      } else parent.append(document.createTextNode(linkParts ? linkParts[1] : token));
+    } else {
+      const isCode = token[0] === '`';
+      const delimiter = isCode ? '`' : token.slice(0, token.startsWith('**') || token.startsWith('__') || token.startsWith('~~') ? 2 : 1);
+      const tag = isCode ? 'code' : delimiter === '~~' ? 'del' : delimiter.length === 2 ? 'strong' : 'em';
+      const element = document.createElement(tag);
+      element.textContent = token.slice(delimiter.length, -delimiter.length);
+      parent.append(element);
+    }
+    lastIndex = pattern.lastIndex;
+  }
+  parent.append(document.createTextNode(text.slice(lastIndex)));
+}
+
+function safeMarkdownUrl(value) {
+  try {
+    const url = new URL(value);
+    return ['https:', 'http:'].includes(url.protocol) ? url.href : '';
+  } catch { return ''; }
 }
 
 function resourceCategoryLabel(category) {
@@ -476,10 +708,55 @@ function openResourceDialog() {
     showToast('Solo los moderadores pueden agregar recursos.');
     return;
   }
-  const form = document.querySelector('#resource-form');
-  form.reset();
+  resourceForm.reset();
+  setResourceEditorMode('edit');
+  updateResourceFields();
   document.querySelector('#resource-form-error').hidden = true;
   document.querySelector('#resource-dialog').showModal();
+}
+
+function updateResourceFields() {
+  const isMod = resourceForm.elements.category.value === 'MOD';
+  const urlInput = resourceForm.elements.url;
+  const urlLabel = document.querySelector('#resource-url-label');
+  const urlHelp = document.querySelector('#resource-url-help');
+  const descriptionLabel = document.querySelector('#resource-description-label');
+  const descriptionHelp = document.querySelector('#resource-description-help');
+  resourceMarkdownTools.hidden = isMod;
+  urlInput.required = isMod;
+  urlLabel.textContent = isMod ? 'ENLACE HTTPS *' : 'ENLACE HTTPS';
+  urlHelp.hidden = isMod;
+  resourceDescription.maxLength = isMod ? 240 : MAX_RESOURCE_MARKDOWN_LENGTH;
+  resourceDescription.rows = isMod ? 3 : 12;
+  resourceDescription.placeholder = isMod
+    ? '¿Qué ofrece y para qué sirve?'
+    : '## Título de la guía\n\nEscribe aquí el contenido en Markdown...';
+  descriptionLabel.textContent = isMod ? 'DESCRIPCIÓN *' : 'CONTENIDO EN MARKDOWN *';
+  descriptionHelp.textContent = isMod ? 'Descripción breve del recurso.' : 'Hasta 10.000 caracteres.';
+  if (!isMod && resourcePreviewTab.getAttribute('aria-selected') === 'true') renderMarkdownPreview();
+}
+
+function setResourceEditorMode(mode) {
+  const previewMode = mode === 'preview';
+  const editTab = document.querySelector('#resource-edit-tab');
+  resourcePreviewTab.classList.toggle('active', previewMode);
+  resourcePreviewTab.setAttribute('aria-selected', String(previewMode));
+  editTab.classList.toggle('active', !previewMode);
+  editTab.setAttribute('aria-selected', String(!previewMode));
+  resourceDescription.hidden = previewMode;
+  resourceMarkdownPreview.hidden = !previewMode;
+  if (previewMode) renderMarkdownPreview();
+}
+
+function renderMarkdownPreview() {
+  resourceMarkdownPreview.replaceChildren();
+  if (resourceDescription.value.trim()) resourceMarkdownPreview.append(renderMarkdown(resourceDescription.value));
+  else {
+    const empty = document.createElement('p');
+    empty.className = 'resource-preview-empty';
+    empty.textContent = 'La vista previa de tu texto Markdown aparecerá aquí.';
+    resourceMarkdownPreview.append(empty);
+  }
 }
 
 async function submitResource(event) {
@@ -494,7 +771,9 @@ async function submitResource(event) {
   }
   if (!form.reportValidity()) return;
   const data = Object.fromEntries(new FormData(form));
-  if (!safeHttpsUrl(data.url) || safeHttpsUrl(data.url) === '#') {
+  const isMod = data.category === 'MOD';
+  if ((isMod && (!safeHttpsUrl(data.url) || safeHttpsUrl(data.url) === '#'))
+    || (data.url && (!safeHttpsUrl(data.url) || safeHttpsUrl(data.url) === '#'))) {
     error.textContent = 'El enlace debe comenzar con https://';
     error.hidden = false;
     return;

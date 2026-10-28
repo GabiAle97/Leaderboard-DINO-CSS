@@ -14,6 +14,7 @@ const NOTIFICATION_HEADERS = ['ID', 'Email', 'Run ID', 'Tipo', 'Mensaje', 'Fecha
 const RESOURCE_HEADERS = ['ID', 'Nombre', 'Categoría', 'URL', 'Descripción', 'Agregado por', 'Fecha'];
 const RESOURCE_CATEGORIES = ['MOD', 'GUIA', 'REGLAS', 'OTRO'];
 const RUN_CATEGORIES = ['ANY%', 'BEST ENDING', 'SEGMENTED%'];
+const MAX_RESOURCE_MARKDOWN_LENGTH = 10000;
 
 function doGet(e) {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -21,6 +22,9 @@ function doGet(e) {
 
   if (action === 'messages') {
     return jsonOutput_({ messages: getPublicMessages_(spreadsheet) });
+  }
+  if (action === 'publicProfile') {
+    return jsonOutput_({ profile: getPublicProfile_(spreadsheet, e.parameter.nickname) });
   }
   if (action === 'leaderboard') {
     const profiles = getPublicProfiles_(spreadsheet);
@@ -493,7 +497,8 @@ function getResources_(spreadsheet) {
   const sheet = spreadsheet.getSheetByName(RESOURCES_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return [];
   return sheet.getDataRange().getDisplayValues().slice(1).filter(row => row[0]).map(row => ({
-    id: row[0], title: row[1], category: row[2], url: row[3], description: row[4], createdAt: row[6]
+    id: row[0], title: String(row[1] || '').replace(/^'/, ''), category: row[2], url: row[3],
+    description: String(row[4] || '').replace(/^'/, ''), createdAt: row[6]
   })).reverse();
 }
 
@@ -501,16 +506,21 @@ function addResource_(spreadsheet, identity, payload) {
   const title = cleanText_(payload.title, 80);
   const category = String(payload.category || '').trim().toUpperCase();
   const url = validHttpsUrl_(payload.url);
-  const description = cleanText_(payload.description, 240);
-  if (!title || !description || !url || RESOURCE_CATEGORIES.indexOf(category) === -1) {
-    throw publicError_('Completa nombre, categoría, enlace HTTPS y descripción del recurso.');
+  const isMod = category === 'MOD';
+  const description = isMod
+    ? cleanText_(payload.description, 240)
+    : cleanMarkdown_(payload.description);
+  if (!title || !description || (!isMod && description.length > MAX_RESOURCE_MARKDOWN_LENGTH)
+    || RESOURCE_CATEGORIES.indexOf(category) === -1
+    || (payload.url && !url) || (isMod && !url)) {
+    throw publicError_('Completa nombre, categoría y contenido. El texto Markdown no puede superar 10.000 caracteres y los recursos MOD requieren un enlace HTTPS válido.');
   }
   const sheet = ensureSheet_(spreadsheet, RESOURCES_SHEET_NAME, RESOURCE_HEADERS);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const values = sheet.getDataRange().getDisplayValues();
-    const duplicate = values.slice(1).some(row => String(row[3] || '').trim().toLowerCase() === url.toLowerCase());
+    const duplicate = url && values.slice(1).some(row => String(row[3] || '').trim().toLowerCase() === url.toLowerCase());
     if (duplicate) throw publicError_('Ese enlace ya está publicado en Recursos.');
     const id = Utilities.getUuid();
     sheet.appendRow([id, safeSheetText_(title), category, url, safeSheetText_(description), safeSheetText_(identity.email), new Date()]);
@@ -564,6 +574,29 @@ function getPublicProfiles_(spreadsheet) {
   return profiles;
 }
 
+function getPublicProfile_(spreadsheet, nickname) {
+  const requestedNickname = String(nickname || '').trim();
+  if (!/^[A-Za-z0-9_ ]{3,20}$/.test(requestedNickname)) return null;
+  const profiles = getPublicProfiles_(spreadsheet);
+  const matchingEmails = Object.keys(profiles).filter(email =>
+    profiles[email].nickname.toLowerCase() === requestedNickname
+  );
+  if (matchingEmails.length !== 1) return null;
+  const email = matchingEmails[0];
+  const profile = profiles[email];
+  const runs = getRuns_(spreadsheet)
+    .filter(run => run.email === email && run.status === 'approved')
+    .map(run => ({
+      category: run.category, time: run.time, date: run.date, video: run.video
+    }));
+  return {
+    nickname: profile.nickname,
+    avatarUrl: profile.avatarUrl,
+    twitchLogin: profile.twitchLogin,
+    runs: runs
+  };
+}
+
 function ensureSheet_(spreadsheet, name, headers) {
   let sheet = spreadsheet.getSheetByName(name);
   if (!sheet) sheet = spreadsheet.insertSheet(name);
@@ -596,6 +629,12 @@ function normalizeTwitchLogin_(value) {
 
 function cleanText_(value, maxLength) {
   return String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+
+function cleanMarkdown_(value) {
+  return String(value || '').replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .trim();
 }
 
 function submitMessage_(payload) {
