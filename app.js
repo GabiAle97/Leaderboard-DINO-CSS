@@ -18,6 +18,7 @@ const descriptions = {
   'SEGMENTED%': 'Run completada por segmentos. Se registra el tiempo total acumulado.',
 };
 let selectedCategory = 'ANY%';
+let activeView = 'home';
 let searchQuery = '';
 let runs = [...DEMO_RUNS];
 let currentUser = null;
@@ -110,6 +111,28 @@ function showToast(message) {
   toast.textContent = message; toast.classList.add('show');
   window.setTimeout(() => toast.classList.remove('show'), 3600);
 }
+function switchView(view) {
+  activeView = ['home', 'rules'].includes(view) ? view : 'leaderboard';
+  const isHome = activeView === 'home';
+  const isLeaderboard = activeView === 'leaderboard';
+  document.querySelector('#hero').hidden = true;
+  document.querySelector('#home-view').hidden = !isHome;
+  document.querySelector('#leaderboard').hidden = !isLeaderboard;
+  document.querySelector('#rules').hidden = activeView !== 'rules';
+  document.querySelector('#submit-banner').hidden = true;
+  if (!isLeaderboard) {
+    myRunsSection.hidden = true;
+    notificationsSection.hidden = true;
+  }
+  document.querySelectorAll('[data-view]').forEach(tab => {
+    const active = tab.dataset.view === activeView;
+    tab.classList.toggle('nav-active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+  history.replaceState(null, '', `#${activeView}`);
+  if (isHome) loadTwitchStreams();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 function readStoredToken() {
   try {
     const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
@@ -136,6 +159,8 @@ document.querySelectorAll('[data-open-submit]').forEach(button => button.addEven
 document.querySelector('.close-button').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
 document.querySelectorAll('.category-tab').forEach(tab => tab.addEventListener('click', () => { selectedCategory = tab.dataset.category; render(); }));
+document.querySelectorAll('[data-view]').forEach(tab => tab.addEventListener('click', () => switchView(tab.dataset.view)));
+document.querySelector('#refresh-twitch').addEventListener('click', () => loadTwitchStreams(true));
 document.querySelector('#search').addEventListener('input', event => { searchQuery = event.target.value.trim().toLowerCase(); render(); });
 document.querySelector('#my-runs-button').addEventListener('click', loadMyRuns);
 document.querySelector('#edit-profile-button').addEventListener('click', openEditProfile);
@@ -180,7 +205,8 @@ profileForm.addEventListener('submit', event => {
     profileError.textContent = 'Elige una imagen PNG, JPG o WEBP.'; profileError.hidden = false; return;
   }
   profileForm.querySelector('[type="submit"]').disabled = true;
-  const save = avatarData => apiPost({ action: 'profile', idToken, nickname, avatarData });
+  const twitchLogin = profileForm.elements.twitchLogin.value.trim();
+  const save = avatarData => apiPost({ action: 'profile', idToken, nickname, avatarData, twitchLogin });
   const request = file ? readAvatarFile(file).then(save) : save('');
   request.then(result => {
     profileDialog.close();
@@ -205,6 +231,7 @@ function openEditProfile() {
   if (!idToken || !currentUser || currentUser.needsSetup) return;
   profileError.hidden = true;
   profileForm.elements.nickname.value = currentUser.nickname || '';
+  profileForm.elements.twitchLogin.value = currentUser.twitchLogin || '';
   avatarFile.value = '';
   document.querySelector('#avatar-file-name').textContent = currentUser.avatarUrl ? 'Foto actual · elige otra para reemplazarla' : 'Sin foto seleccionada';
   document.querySelector('#profile-dialog-eyebrow').textContent = 'AJUSTES DE CUENTA';
@@ -304,6 +331,106 @@ async function loadLeaderboard() {
   }
 }
 
+async function loadTwitchStreams(forceRefresh = false) {
+  const container = document.querySelector('#twitch-streams');
+  const status = document.querySelector('#twitch-status');
+  const count = document.querySelector('#twitch-count');
+  const refreshButton = document.querySelector('#refresh-twitch');
+  if (!SCRIPT_URL) {
+    status.textContent = 'Configura el Apps Script para conectar con Twitch.';
+    renderTwitchMessage(container, 'La integración de Twitch aún no está disponible.');
+    return;
+  }
+  if (!forceRefresh && container.dataset.loaded === 'true') return;
+  status.textContent = 'Buscando canales en directo…';
+  count.textContent = '';
+  refreshButton.disabled = true;
+  try {
+    const endpoint = new URL(SCRIPT_URL);
+    endpoint.searchParams.set('action', 'twitchLive');
+    if (forceRefresh) endpoint.searchParams.set('refresh', '1');
+    const response = await fetch(endpoint, { method: 'GET', mode: 'cors', cache: 'no-store' });
+    if (!response.ok) throw new Error('Twitch no respondió correctamente.');
+    const payload = await response.json();
+    if (!Array.isArray(payload.streams)) {
+      throw new Error('El Apps Script aún no incluye la consulta de Twitch. Actualiza el despliegue.');
+    }
+    container.dataset.loaded = 'true';
+    if (!payload.configured) {
+      status.textContent = payload.message || 'La integración de Twitch todavía no está configurada.';
+      renderTwitchMessage(container, 'La lista se activará cuando se configuren las credenciales de Twitch en Apps Script.');
+      return;
+    }
+    const streams = payload.streams;
+    count.textContent = `${streams.length} ${streams.length === 1 ? 'CANAL EN VIVO' : 'CANALES EN VIVO'}`;
+    const categories = (payload.categories || []).join(' · ');
+    const linkedCount = Number(payload.linkedRunnerCount || 0);
+    const linkedSummary = linkedCount ? ` · ${linkedCount} ${linkedCount === 1 ? 'RUNNER VINCULADO' : 'RUNNERS VINCULADOS'}` : '';
+    status.textContent = streams.length
+      ? `EN DIRECTO${categories ? ' · ' + categories : ''}${linkedSummary}`
+      : (payload.message || `No hay canales en vivo. ${payload.linkedRunnerCount || 0} runners tienen Twitch vinculado.`);
+    renderTwitchStreams(container, streams);
+  } catch (requestError) {
+    container.dataset.loaded = 'false';
+    status.textContent = 'No se pudo actualizar la lista de Twitch.';
+    renderTwitchMessage(container, requestError.message);
+  } finally {
+    refreshButton.disabled = false;
+  }
+}
+
+function renderTwitchMessage(container, message) {
+  container.replaceChildren();
+  const empty = document.createElement('div'); empty.className = 'twitch-empty';
+  const icon = document.createElement('span'); icon.className = 'twitch-empty-icon'; icon.textContent = '◉';
+  const text = document.createElement('p'); text.textContent = message;
+  empty.append(icon, text); container.append(empty);
+}
+
+function renderTwitchStreams(container, streams) {
+  container.replaceChildren();
+  if (!streams.length) {
+    renderTwitchMessage(container, 'No hay runners transmitiendo Dino Crisis en Twitch en este momento.');
+    return;
+  }
+  streams.forEach(stream => {
+    const card = document.createElement('article'); card.className = 'twitch-card';
+    const previewLink = document.createElement('a'); previewLink.className = 'twitch-preview';
+    previewLink.href = `https://www.twitch.tv/${encodeURIComponent(stream.login)}`;
+    previewLink.target = '_blank'; previewLink.rel = 'noopener noreferrer';
+    const thumbnailUrl = safeImageUrl(stream.thumbnail);
+    if (thumbnailUrl) {
+      const image = document.createElement('img'); image.src = thumbnailUrl; image.alt = `Vista previa del stream de ${stream.name}`; image.loading = 'lazy';
+      previewLink.append(image);
+    }
+    const liveBadge = document.createElement('span'); liveBadge.className = 'twitch-live-badge';
+    const liveDot = document.createElement('i'); liveBadge.append(liveDot, document.createTextNode(' EN VIVO'));
+    const play = document.createElement('span'); play.className = 'twitch-play'; play.textContent = '▶';
+    previewLink.append(liveBadge, play);
+
+    const details = document.createElement('div'); details.className = 'twitch-card-details';
+    const heading = document.createElement('div'); heading.className = 'twitch-card-heading';
+    const name = document.createElement('h2'); name.textContent = stream.name;
+    const viewers = document.createElement('span'); viewers.className = 'twitch-viewers'; viewers.textContent = `${Number(stream.viewers || 0).toLocaleString('es')} viendo`;
+    heading.append(name, viewers);
+    const title = document.createElement('p'); title.className = 'twitch-stream-title'; title.textContent = stream.title || 'Dino Crisis en directo'; title.title = stream.title || '';
+    const meta = document.createElement('div'); meta.className = 'twitch-card-meta';
+    const game = document.createElement('span'); game.textContent = stream.game || 'Dino Crisis';
+    const language = document.createElement('span'); language.textContent = stream.language ? stream.language.toUpperCase() : '';
+    meta.append(game, language);
+    const sourceBadges = document.createElement('div'); sourceBadges.className = 'twitch-source-badges';
+    (stream.dinoGames || []).forEach(gameName => {
+      const badge = document.createElement('span'); badge.className = 'twitch-source-badge'; badge.textContent = `JUGANDO ${gameName.toUpperCase()}`; sourceBadges.append(badge);
+    });
+    if (stream.isLeaderboardRunner) {
+      const runnerBadge = document.createElement('span'); runnerBadge.className = 'twitch-source-badge leaderboard-runner-badge';
+      runnerBadge.textContent = `RUNNER DEL LEADERBOARD${stream.runnerNickname ? ' · ' + stream.runnerNickname : ''}`; sourceBadges.append(runnerBadge);
+    }
+    const link = document.createElement('a'); link.className = 'button button-primary twitch-watch'; link.href = previewLink.href; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'VER EN TWITCH ↗';
+    details.append(heading, title, meta, sourceBadges, link); card.append(previewLink, details); container.append(card);
+  });
+}
+
 window.renderGoogleSignInButton = renderGoogleSignInButton;
 window.handleGoogleCredentialResponse = handleGoogleCredentialResponse;
 function renderGoogleSignInButton() {
@@ -389,6 +516,7 @@ function signOut() {
 
 async function loadMyRuns() {
   if (!idToken) return;
+  switchView('leaderboard');
   const list = document.querySelector('#my-runs-list');
   myRunsSection.hidden = false;
   list.textContent = 'Cargando tus runs…';
@@ -446,6 +574,7 @@ function renderNotifications(notifications) {
 
 async function toggleNotifications() {
   if (!idToken) return;
+  switchView('leaderboard');
   notificationsSection.hidden = !notificationsSection.hidden;
   if (notificationsSection.hidden) return;
   notificationsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -504,6 +633,10 @@ async function reviewRun(runId, status, button) {
 }
 
 render();
+switchView(location.hash === '#rules' ? 'rules' : location.hash === '#leaderboard' ? 'leaderboard' : 'home');
 loadLeaderboard();
 restoreSession();
-window.setInterval(() => { if (idToken) loadNotifications(true); }, 60000);
+window.setInterval(() => {
+  if (idToken) loadNotifications(true);
+  if (activeView === 'home') loadTwitchStreams(true);
+}, 120000);

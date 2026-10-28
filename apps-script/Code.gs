@@ -8,7 +8,7 @@ const RUNS_SHEET_NAME = 'Dino Crisis Runs';
 const USERS_SHEET_NAME = 'Usuarios';
 const NOTIFICATIONS_SHEET_NAME = 'Notificaciones';
 const RUN_HEADERS = ['ID', 'Fecha de envío', 'Email', 'Jugador', 'Categoría', 'Tiempo', 'Plataforma', 'Fecha de run', 'Video', 'Notas', 'Estado', 'Revisado por', 'Fecha de revisión', 'Nota de revisión'];
-const USER_HEADERS = ['Email', 'Nombre de Google', 'Rol', 'Fecha de registro', 'Nickname', 'Foto de perfil'];
+const USER_HEADERS = ['Email', 'Nombre de Google', 'Rol', 'Fecha de registro', 'Nickname', 'Foto de perfil', 'Twitch'];
 const NOTIFICATION_HEADERS = ['ID', 'Email', 'Run ID', 'Tipo', 'Mensaje', 'Fecha', 'Leída'];
 const RUN_CATEGORIES = ['ANY%', 'BEST ENDING', 'SEGMENTED%'];
 
@@ -30,6 +30,9 @@ function doGet(e) {
       }));
     return jsonOutput_({ runs: publicRuns });
   }
+  if (action === 'twitchLive') {
+    return jsonOutput_(getTwitchLiveStreams_(spreadsheet));
+  }
 
   // Conserva el endpoint existente usado por el sitio para leer Match Details.
   const allSheets = spreadsheet.getSheets().map(sheet => {
@@ -43,6 +46,116 @@ function doGet(e) {
   });
 
   return jsonOutput_({ sheets: allSheets });
+}
+
+function getTwitchLiveStreams_(spreadsheet) {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('twitch-live-dino-crisis-v3');
+  if (cached) return JSON.parse(cached);
+
+  const properties = PropertiesService.getScriptProperties();
+  const clientId = String(properties.getProperty('TWITCH_CLIENT_ID') || '').trim();
+  const clientSecret = String(properties.getProperty('TWITCH_CLIENT_SECRET') || '').trim();
+  if (!clientId || !clientSecret) {
+    return { configured: false, streams: [], message: 'La integración de Twitch todavía no está configurada.' };
+  }
+
+  try {
+    let token = cache.get('twitch-app-access-token-v1');
+    if (!token) {
+      const tokenResponse = UrlFetchApp.fetch('https://id.twitch.tv/oauth2/token', {
+        method: 'post',
+        payload: { client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' },
+        muteHttpExceptions: true
+      });
+      if (tokenResponse.getResponseCode() !== 200) throw new Error('No se pudo obtener el token de aplicación de Twitch.');
+      const tokenPayload = JSON.parse(tokenResponse.getContentText());
+      token = String(tokenPayload.access_token || '');
+      const tokenTtl = Math.min(21600, Math.max(60, Number(tokenPayload.expires_in || 3600) - 60));
+      if (token) cache.put('twitch-app-access-token-v1', token, tokenTtl);
+    }
+    if (!token) throw new Error('Twitch no devolvió un token de acceso.');
+
+    const headers = { 'Client-Id': clientId, 'Authorization': 'Bearer ' + token };
+    const categoryNames = ['Dino Crisis', 'Dino Crisis 2', 'Dino Crisis 3'];
+    const categoryRequests = categoryNames.map(name => ({
+      url: 'https://api.twitch.tv/helix/search/categories?query=' + encodeURIComponent(name) + '&first=100',
+      headers: headers, muteHttpExceptions: true
+    }));
+    const categoryResponses = UrlFetchApp.fetchAll(categoryRequests);
+    const categoryNamesById = {};
+    categoryResponses.forEach((response, index) => {
+      if (response.getResponseCode() !== 200) throw new Error('Twitch no pudo buscar la categoría ' + categoryNames[index] + '.');
+      const expected = categoryNames[index].toLowerCase();
+      const found = (JSON.parse(response.getContentText()).data || []).find(item => String(item.name || '').trim().toLowerCase() === expected);
+      if (found) categoryNamesById[String(found.id)] = String(found.name);
+    });
+
+    const submittedEmails = {};
+    getRuns_(spreadsheet).forEach(run => { if (run.email) submittedEmails[run.email] = true; });
+    const profiles = getPublicProfiles_(spreadsheet);
+    const runnerProfiles = {};
+    Object.keys(submittedEmails).forEach(email => {
+      const profile = profiles[email];
+      if (profile && profile.twitchLogin) runnerProfiles[profile.twitchLogin] = profile;
+    });
+    const runnerLogins = Object.keys(runnerProfiles).slice(0, 100);
+
+    const streamRequests = Object.keys(categoryNamesById).map(gameId => ({
+      url: 'https://api.twitch.tv/helix/streams?game_id=' + encodeURIComponent(gameId) + '&first=100',
+      headers: headers, muteHttpExceptions: true
+    }));
+    for (let offset = 0; offset < runnerLogins.length; offset += 100) {
+      const loginParams = runnerLogins.slice(offset, offset + 100)
+        .map(login => '&user_login=' + encodeURIComponent(login)).join('');
+      streamRequests.push({
+        url: 'https://api.twitch.tv/helix/streams?first=100' + loginParams,
+        headers: headers, muteHttpExceptions: true
+      });
+    }
+
+    const streamResponses = streamRequests.length ? UrlFetchApp.fetchAll(streamRequests) : [];
+    const streamsByLogin = {};
+    streamResponses.forEach(response => {
+      if (response.getResponseCode() !== 200) throw new Error('Twitch no pudo cargar los canales en directo.');
+      (JSON.parse(response.getContentText()).data || []).forEach(stream => {
+        const login = String(stream.user_login || '').toLowerCase();
+        if (!/^[a-z0-9_]{1,25}$/.test(login)) return;
+        if (!streamsByLogin[login]) streamsByLogin[login] = {
+          id: String(stream.id || ''), login: login,
+          name: String(stream.user_name || stream.user_login || ''),
+          title: String(stream.title || ''), game: String(stream.game_name || ''),
+          viewers: Number(stream.viewer_count || 0), language: String(stream.language || ''),
+          startedAt: String(stream.started_at || ''),
+          thumbnail: String(stream.thumbnail_url || '').replace('{width}', '640').replace('{height}', '360'),
+          dinoGames: [], isLeaderboardRunner: false, runnerNickname: ''
+        };
+        const streamInfo = streamsByLogin[login];
+        const matchedGame = categoryNamesById[String(stream.game_id || '')];
+        if (matchedGame && streamInfo.dinoGames.indexOf(matchedGame) === -1) streamInfo.dinoGames.push(matchedGame);
+        if (runnerProfiles[login]) {
+          streamInfo.isLeaderboardRunner = true;
+          streamInfo.runnerNickname = runnerProfiles[login].nickname;
+        }
+      });
+    });
+
+    const streams = Object.keys(streamsByLogin).map(login => streamsByLogin[login]);
+    streams.sort((a, b) => Number(b.isLeaderboardRunner) - Number(a.isLeaderboardRunner) || b.viewers - a.viewers);
+    const result = {
+      configured: true,
+      categories: categoryNames.filter(name => Object.keys(categoryNamesById).some(id => categoryNamesById[id] === name)),
+      linkedRunnerCount: runnerLogins.length,
+      streams: streams, checkedAt: new Date().toISOString()
+    };
+    const serialized = JSON.stringify(result);
+    // CacheService limits each value; the live response itself can still include the full result.
+    if (serialized.length < 90000) cache.put('twitch-live-dino-crisis-v3', serialized, 60);
+    return result;
+  } catch (error) {
+    console.error('Twitch live lookup failed: ' + (error && error.stack ? error.stack : error));
+    return { configured: true, streams: [], message: 'No se pudo consultar Twitch. Inténtalo de nuevo más tarde.' };
+  }
 }
 
 function doPost(e) {
@@ -178,7 +291,7 @@ function ensureUser_(spreadsheet, identity) {
         return userFromRow_(latest[i], identity);
       }
     }
-    sheet.appendRow([safeSheetText_(identity.email), safeSheetText_(identity.name), 'player', new Date(), '', '']);
+    sheet.appendRow([safeSheetText_(identity.email), safeSheetText_(identity.name), 'player', new Date(), '', '', '']);
   } finally {
     lock.releaseLock();
   }
@@ -186,7 +299,7 @@ function ensureUser_(spreadsheet, identity) {
 }
 
 function publicUser_(user) {
-  return { name: user.nickname || user.name, nickname: user.nickname, avatarUrl: user.avatarUrl, role: user.role, needsSetup: user.needsSetup };
+  return { name: user.nickname || user.name, nickname: user.nickname, avatarUrl: user.avatarUrl, twitchLogin: user.twitchLogin || '', role: user.role, needsSetup: user.needsSetup };
 }
 
 function userFromRow_(row, identity) {
@@ -197,6 +310,7 @@ function userFromRow_(row, identity) {
     role: String(row[2] || 'player').toLowerCase(),
     nickname: nickname,
     avatarUrl: validHttpsUrl_(row[5]) || identity.picture || '',
+    twitchLogin: normalizeTwitchLogin_(row[6] || ''),
     needsSetup: !nickname
   };
 }
@@ -211,6 +325,9 @@ function saveProfile_(spreadsheet, identity, payload) {
   if (!/^[A-Za-z0-9_ ]{3,20}$/.test(nickname)) {
     throw publicError_('El nickname debe tener entre 3 y 20 caracteres: letras, números, espacios o guion bajo.');
   }
+  const rawTwitchLogin = String(payload.twitchLogin || '').trim();
+  const twitchLogin = normalizeTwitchLogin_(rawTwitchLogin);
+  if (rawTwitchLogin && !twitchLogin) throw publicError_('Introduce un canal de Twitch válido, por ejemplo twitch.tv/tu_canal.');
   const sheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
   const rows = sheet.getDataRange().getValues();
   const currentRow = rows.findIndex((row, index) => index > 0 && String(row[0] || '').trim().toLowerCase() === identity.email);
@@ -228,11 +345,11 @@ function saveProfile_(spreadsheet, identity, payload) {
     const duplicateNow = latestRows.some((row, index) => index > 0 && index !== currentRow && String(row[4] || '').trim().toLowerCase() === nickname.toLowerCase());
     if (duplicateNow) throw publicError_('Ese nickname ya está en uso. Elige otro.');
     avatarUrl = avatarData ? saveAvatar_(identity, avatarData) : (existingAvatar || identity.picture || '');
-    sheet.getRange(currentRow + 1, 5, 1, 2).setValues([[safeSheetText_(nickname), avatarUrl]]);
+    sheet.getRange(currentRow + 1, 5, 1, 3).setValues([[safeSheetText_(nickname), avatarUrl, twitchLogin]]);
   } finally {
     lock.releaseLock();
   }
-  return { email: identity.email, name: String(rows[currentRow][1] || identity.name), role: String(rows[currentRow][2] || 'player').toLowerCase(), nickname: nickname, avatarUrl: avatarUrl, needsSetup: false };
+  return { email: identity.email, name: String(rows[currentRow][1] || identity.name), role: String(rows[currentRow][2] || 'player').toLowerCase(), nickname: nickname, avatarUrl: avatarUrl, twitchLogin: twitchLogin, needsSetup: false };
 }
 
 function saveAvatar_(identity, dataUrl) {
@@ -392,7 +509,11 @@ function getPublicProfiles_(spreadsheet) {
   if (!sheet || sheet.getLastRow() < 2) return profiles;
   sheet.getDataRange().getDisplayValues().slice(1).forEach(row => {
     const email = String(row[0] || '').trim().toLowerCase();
-    if (email) profiles[email] = { nickname: cleanText_(row[4], 20), avatarUrl: validHttpsUrl_(row[5]) };
+    if (email) profiles[email] = {
+      nickname: cleanText_(row[4], 20),
+      avatarUrl: validHttpsUrl_(row[5]),
+      twitchLogin: normalizeTwitchLogin_(row[6] || '')
+    };
   });
   return profiles;
 }
@@ -416,6 +537,15 @@ function isValidRunDate_(value) {
 function validHttpsUrl_(value) {
   const url = String(value || '').trim();
   return /^https:\/\/[a-z0-9.-]+(?::\d+)?(?:[/?#][^\s]*)?$/i.test(url) ? url.slice(0, 500) : '';
+}
+
+function normalizeTwitchLogin_(value) {
+  let login = String(value || '').trim().toLowerCase();
+  if (!login) return '';
+  login = login.replace(/^@/, '');
+  const urlMatch = login.match(/^(?:https?:\/\/)?(?:www\.)?twitch\.tv\/([a-z0-9_]{1,25})\/?$/i);
+  if (urlMatch) login = urlMatch[1];
+  return /^[a-z0-9_]{1,25}$/.test(login) ? login : '';
 }
 
 function cleanText_(value, maxLength) {

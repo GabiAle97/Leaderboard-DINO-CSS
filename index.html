@@ -17,6 +17,9 @@
     <link rel="stylesheet" href="time-inputs.css" />
     <link rel="stylesheet" href="google-button-fix.css" />
     <link rel="stylesheet" href="header-profile.css" />
+    <link rel="stylesheet" href="tabs.css" />
+    <link rel="stylesheet" href="home.css" />
+    <link rel="stylesheet" href="home-live-sources.css" />
     <link rel="icon" href="favicon.ico" />
   </head>
   <body>
@@ -26,9 +29,10 @@
         <span class="brand-mark">DC<span>//</span></span>
         <span class="brand-name">RUN<span>ARCHIVE</span></span>
       </a>
-      <nav class="top-nav" aria-label="Navegación principal">
-        <a class="nav-active" href="#leaderboard">LEADERBOARD</a>
-        <a href="#rules">REGLAS</a>
+      <nav class="top-nav" role="tablist" aria-label="Navegación principal">
+        <button type="button" role="tab" aria-selected="false" data-view="home">HOME</button>
+        <button class="nav-active" type="button" role="tab" aria-selected="true" data-view="leaderboard">LEADERBOARD</button>
+        <button type="button" role="tab" aria-selected="false" data-view="rules">REGLAS</button>
       </nav>
       <div class="auth-controls">
         <div id="google-signin-button"></div>
@@ -45,7 +49,16 @@
     </header>
 
     <main id="top">
-      <section class="hero">
+      <section class="home-view section-wrap" id="home-view" hidden>
+        <div class="home-heading">
+          <div><div class="eyebrow"><i></i> EN DIRECTO EN TWITCH</div><h1>RUNNERS <span>LIVE.</span></h1><p>Canales en vivo de Dino Crisis, Dino Crisis 2 y Dino Crisis 3, más runners del leaderboard que vincularon su Twitch.</p></div>
+          <button type="button" class="button button-outline" id="refresh-twitch">ACTUALIZAR <span>↻</span></button>
+        </div>
+        <div class="live-summary"><span class="live-indicator"></span><span id="twitch-status" aria-live="polite">Conectando con Twitch…</span><span id="twitch-count" class="twitch-count"></span></div>
+        <div id="twitch-streams" class="twitch-streams" aria-live="polite"></div>
+        <p class="twitch-footnote">Los canales del leaderboard aparecen aquí cuando vinculan su cuenta de Twitch desde Mi perfil, incluso si están jugando otro juego. Los demás resultados se basan en la categoría seleccionada en Twitch. La categoría no confirma el uso de Cutscene Skip Mod.</p>
+      </section>
+      <section class="hero" id="hero">
         <div class="hero-copy">
           <div class="eyebrow"><i></i> COMUNIDAD SPEEDRUN · ARCHIVO ABIERTO</div>
           <h1>NO HAY TIEMPO<br />QUE <span>PERDER.</span></h1>
@@ -121,7 +134,7 @@
         </ol>
       </section>
 
-      <section class="submit-banner section-wrap">
+      <section class="submit-banner section-wrap" id="submit-banner">
         <div class="banner-icon">▤</div><div><div class="eyebrow"><i></i> ¿NUEVO RÉCORD?</div><h3>Tu run merece <span>ser vista.</span></h3><p>Comparte tu tiempo y el video de la run. Las submissions se revisan antes de aparecer en el leaderboard.</p></div><button class="button button-primary" data-open-submit>SUBMIT RUN <span>↗</span></button>
       </section>
     </main>
@@ -151,8 +164,9 @@
         <div class="dialog-header"><div><div class="eyebrow"><i></i> <span id="profile-dialog-eyebrow">CONFIGURA TU PERFIL</span></div><h2 id="profile-dialog-title">ELIGE TU <span>NICKNAME.</span></h2></div><button type="button" class="close-button profile-close-button" aria-label="Cerrar perfil" hidden>×</button></div>
         <p class="dialog-intro" id="profile-dialog-intro">Tu nickname aparecerá en el leaderboard y se asociará automáticamente a todas tus runs.</p>
         <label class="field">NICKNAME *<input name="nickname" minlength="3" maxlength="20" required autocomplete="nickname" placeholder="Ej. ReginaRunner" pattern="[A-Za-z0-9_ ]{3,20}" /></label>
+        <label class="field">CANAL DE TWITCH <span class="optional-label">OPCIONAL · PARA APARECER EN HOME CUANDO ESTÉS EN VIVO</span><input name="twitchLogin" maxlength="100" autocomplete="url" placeholder="twitch.tv/tu_canal" /></label>
         <label class="field profile-photo-field">FOTO DE PERFIL <span class="optional-label">OPCIONAL · PNG, JPG O WEBP · MÁX. 400 KB</span><input name="avatar" type="file" accept="image/png,image/jpeg,image/webp" /><span id="avatar-file-name">Sin foto seleccionada</span></label>
-        <p class="profile-privacy">La foto se mostrará públicamente junto a tu nickname. Puedes dejarla vacía.</p>
+        <p class="profile-privacy">La foto y el canal de Twitch se muestran públicamente. El canal aparece en Home si estás en vivo y enviaste una run. Ambos son opcionales.</p>
         <p class="form-error" id="profile-error" role="alert" hidden></p>
         <div class="dialog-footer"><span>El nickname debe ser único.</span><button class="button button-primary" type="submit">GUARDAR PERFIL <span>↗</span></button></div>
       </form>

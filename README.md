@@ -12,11 +12,22 @@ Las filas y tiempos precargados son **datos ficticios de demostración**, no ré
 
 ## Login, submissions y moderación
 
-El proyecto incluye el código fuente extendido del Apps Script en `apps-script/Code.gs` y el cliente web espera las acciones `profile`, `submitRun`, `myRuns`, `pendingRuns`, `reviewRun`, `notifications`, `markNotificationsRead` y `GET?action=leaderboard`. El script valida el ID token de Google en servidor contra su audiencia OAuth; los usuarios nuevos se agregan con rol `player`. Las runs nuevas quedan `pending`; el leaderboard público solo devuelve runs `approved`. Los moderadores se asignan manualmente en la pestaña protegida `Usuarios`, cambiando su rol a `moderator`. Nunca permitas que usuarios públicos editen esa pestaña.
+El proyecto incluye el código fuente extendido del Apps Script en `apps-script/Code.gs` y el cliente web espera las acciones `profile`, `submitRun`, `myRuns`, `pendingRuns`, `reviewRun`, `notifications`, `markNotificationsRead`, `GET?action=leaderboard` y `GET?action=twitchLive`. El script valida el ID token de Google en servidor contra su audiencia OAuth; los usuarios nuevos se agregan con rol `player`. Las runs nuevas quedan `pending`; el leaderboard público solo devuelve runs `approved`. Los moderadores se asignan manualmente en la pestaña protegida `Usuarios`, cambiando su rol a `moderator`. Nunca permitas que usuarios públicos editen esa pestaña.
 
-En el primer inicio de sesión, cada usuario debe elegir un nickname único (3–20 caracteres; letras, números, espacios o guion bajo). Puede subir una foto PNG, JPG o WEBP de hasta 400 KB; la foto se publica en Google Drive para mostrarse junto al perfil y es opcional. Si no elige foto, se usa la imagen de Google cuando esté disponible. La hoja `Usuarios` conserva las columnas actuales de email, nombre Google, rol y fecha, y agrega `Nickname` y `Foto de perfil`.
+En el primer inicio de sesión, cada usuario debe elegir un nickname único (3–20 caracteres; letras, números, espacios o guion bajo). Puede subir una foto PNG, JPG o WEBP de hasta 400 KB; la foto se publica en Google Drive para mostrarse junto al perfil y es opcional. También puede guardar su login/URL de Twitch para que su canal aparezca en Home al transmitir, incluso si está en otra categoría. Si no elige foto, se usa la imagen de Google cuando esté disponible. La hoja `Usuarios` conserva las columnas actuales y agrega `Nickname`, `Foto de perfil` y `Twitch`.
 
 Las runs usan el nickname y la foto del perfil autenticado; no aceptan un nombre enviado desde el formulario. La sesión se conserva en `sessionStorage` y se revalida contra Apps Script tras recargar la página. Dura hasta que venza el ID token de Google (normalmente alrededor de una hora) o se cierre la pestaña/sesión. Al aprobar o rechazar una run, Apps Script escribe una notificación en `Notificaciones`; los rechazos requieren motivo.
+
+## Home: runners en Twitch
+
+La pestaña Home consulta streams live de las categorías **Dino Crisis**, **Dino Crisis 2** y **Dino Crisis 3**. También incluye los perfiles que enviaron runs si vincularon su usuario/canal de Twitch en **Mi perfil**, incluso cuando transmiten otro juego. Muestra vista previa, canal, título, espectadores y enlace al stream, etiquetando por qué aparece cada canal. El vínculo de Twitch es opcional; quienes ya tienen cuenta pueden añadirlo editando su perfil. Estar en una categoría de juego no verifica por sí solo el uso del mod.
+
+Para habilitarlo, crea una aplicación en [Twitch Developer Console](https://dev.twitch.tv/console/apps) y guarda sus credenciales en las **Propiedades del script** de Apps Script, nunca en `config.js` ni en JavaScript del navegador:
+
+- `TWITCH_CLIENT_ID`
+- `TWITCH_CLIENT_SECRET`
+
+El endpoint público `GET?action=twitchLive` usa client credentials desde el servidor, busca las categorías y compara los canales vinculados con todas las cuentas que hayan enviado una run (pendiente, aprobada o rechazada). La respuesta se cachea durante 60 segundos. Copia y despliega el `apps-script/Code.gs` actualizado para activarlo. El Home consulta Twitch al abrirse, al pulsar Actualizar y cada dos minutos mientras la pestaña permanezca abierta.
 
 Para habilitarlo:
 
@@ -24,7 +35,7 @@ Para habilitarlo:
 2. Pon el mismo ID en `config.js` y en `GOOGLE_CLIENT_ID` de `apps-script/Code.gs`. El ID de cliente es público; no agregues client secrets al frontend.
 3. Copia el contenido actualizado de `apps-script/Code.gs` al proyecto Apps Script asociado a la misma hoja. El script conserva el endpoint anterior de Match Details y los mensajes existentes, y crea `Dino Crisis Runs` y `Usuarios` cuando se necesiten.
 4. Guarda y vuelve a desplegar como aplicación web, ejecutando como propietario y habilitada para recibir solicitudes. La hoja debe pertenecer al propietario que ejecuta el script. Ejecuta `authorizeRunArchive()` y autoriza Sheets, Drive y las solicitudes externas requeridas.
-5. Inicia sesión para crear la fila de perfil y selecciona nickname. Asigna `moderator` manualmente a cuentas de confianza y protege la pestaña `Usuarios`. Si ya existe el despliegue, actualízalo para incluir la configuración de perfil, Drive y `Notificaciones`; si cambia la URL, actualiza `config.js`.
+5. Inicia sesión para crear la fila de perfil y selecciona nickname. Asigna `moderator` manualmente a cuentas de confianza y protege la pestaña `Usuarios`. Si ya existe el despliegue, actualízalo para incluir la configuración de perfil, Drive, Twitch y `Notificaciones`; si cambia la URL, actualiza `config.js`.
 
 El despliegue actual responde a `GET?action=leaderboard` con `{ "runs": [] }`, por lo que la URL está configurada en `config.js` y la lectura pública del leaderboard ya tiene el formato esperado. El flujo de login y escritura requiere probarse con una cuenta autorizada después de copiar y desplegar el código actualizado; no envíes submissions de prueba a la hoja de producción.
 
