@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="home.css" />
     <link rel="stylesheet" href="home-live-sources.css" />
     <link rel="stylesheet" href="resources.css" />
+    <link rel="stylesheet" href="language.css" />
     <link rel="icon" href="favicon.ico" />
   </head>
   <body>
@@ -36,6 +37,10 @@
         <button type="button" role="tab" aria-selected="false" data-view="resources">RECURSOS</button>
         <button type="button" role="tab" aria-selected="false" data-view="rules">REGLAS</button>
       </nav>
+      <div class="language-switch" role="group" aria-label="Idioma">
+        <button type="button" data-language="es" aria-pressed="false">ES</button>
+        <button type="button" data-language="en" aria-pressed="false">EN</button>
+      </div>
       <div class="auth-controls">
         <div id="google-signin-button"></div>
         <span id="auth-config-notice">LOGIN GOOGLE PENDIENTE DE CONFIGURACIÓN</span>
@@ -53,7 +58,7 @@
     <main id="top">
       <section class="home-view section-wrap" id="home-view" hidden>
         <div class="home-heading">
-          <div><div class="eyebrow"><i></i> EN DIRECTO EN TWITCH</div><h1>RUNNERS <span>LIVE.</span></h1><p>Canales en vivo de Dino Crisis, Dino Crisis 2 y Dino Crisis 3, más runners del leaderboard que vincularon su Twitch.</p></div>
+          <div><div class="eyebrow"><i></i> EN DIRECTO EN TWITCH</div><h1>RUNNERS <span>EN VIVO.</span></h1><p>Canales en vivo de Dino Crisis, Dino Crisis 2 y Dino Crisis 3, más runners del leaderboard que vincularon su Twitch.</p></div>
           <button type="button" class="button button-outline" id="refresh-twitch">ACTUALIZAR <span>↻</span></button>
         </div>
         <div class="live-summary"><span class="live-indicator"></span><span id="twitch-status" aria-live="polite">Conectando con Twitch…</span><span id="twitch-count" class="twitch-count"></span></div>
@@ -98,7 +103,7 @@
 
       <section class="leaderboard section-wrap" id="leaderboard">
         <div class="section-heading">
-          <div><div class="eyebrow"><i></i> CLASIFICACIÓN DE LA COMUNIDAD</div><h2>THE <span>LEADERBOARD</span></h2></div>
+          <div><div class="eyebrow"><i></i> CLASIFICACIÓN DE LA COMUNIDAD</div><h2>EL <span>LEADERBOARD</span></h2></div>
           <div class="game-chip"><span class="chip-dot"></span> DINO CRISIS <b>·</b> CUTSCENE SKIP MOD</div>
         </div>
         <div class="leaderboard-tools">
@@ -217,6 +222,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="https://accounts.google.com/gsi/client" async defer onload="window.renderGoogleSignInButton && window.renderGoogleSignInButton()"></script>
     <script src="config.js"></script>
+    <script src="i18n.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

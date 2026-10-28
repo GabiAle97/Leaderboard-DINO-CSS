@@ -6,6 +6,8 @@ Prototipo web responsive para registrar y explorar runs de **Dino Crisis Cutscen
 
 Sirve la carpeta desde un origen HTTP/HTTPS local o publicado; el inicio de sesión de Google no funciona desde `file://`. No requiere dependencias de npm. Las submissions se guardan en Google Sheets cuando se configure y despliegue el Apps Script. La plataforma aceptada es exclusivamente PC.
 
+La interfaz está disponible en español e inglés. El idioma inicial se detecta desde las preferencias del navegador; se puede cambiar con el selector `ES / EN` del encabezado y la elección queda guardada en el navegador.
+
 ## Leaderboard
 
 El leaderboard no muestra filas ficticias. Al cargar la página, espera las runs aprobadas de Apps Script y presenta un estado vacío si todavía no hay resultados. Si la URL o el despliegue no están disponibles, muestra un aviso en lugar de sustituir las runs por placeholders.

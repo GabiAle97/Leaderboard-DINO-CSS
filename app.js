@@ -16,7 +16,8 @@ let resources = [];
 let selectedResourceFilter = 'all';
 let currentUser = null;
 let idToken = readStoredToken();
-let googleButtonRendered = false;
+let googleButtonLanguage = '';
+let googleIdentityInitialized = false;
 const knownNotificationIds = new Set();
 const tableBody = document.querySelector('#run-rows');
 const emptyState = document.querySelector('#empty-state');
@@ -50,7 +51,7 @@ function secondsFromTime(value) {
 }
 function formatDate(value) {
   const date = new Date(`${value}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('es', { day: '2-digit', month: 'short', year: 'numeric' }).format(date).replace('.', '').toUpperCase();
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(window.getAppLanguage() === 'en' ? 'en' : 'es', { day: '2-digit', month: 'short', year: 'numeric' }).format(date).replace('.', '').toUpperCase();
 }
 function render() {
   const filtered = runs.filter(run => run.category === selectedCategory && run.player.toLowerCase().includes(searchQuery));
@@ -68,11 +69,14 @@ function render() {
     const playerWrap = document.createElement('div'); playerWrap.className = 'player-cell';
     const avatar = createAvatar(nickname, run.avatarUrl);
     const name = document.createElement('button');
-    name.textContent = nickname;
     name.type = 'button';
     name.className = 'player-profile-link';
     name.setAttribute('aria-label', `Ver perfil público de ${nickname}`);
     name.addEventListener('click', () => openPublicProfile(nickname));
+    const nameText = document.createElement('span');
+    nameText.textContent = nickname;
+    nameText.dataset.i18nPreserve = '';
+    name.append(nameText);
     playerWrap.append(avatar, name); player.append(playerWrap);
     const time = document.createElement('td'); time.className = 'time-cell'; time.textContent = run.time;
     const platform = document.createElement('td'); const tag = document.createElement('span'); tag.className = 'platform-tag'; tag.textContent = run.platform; platform.append(tag);
@@ -147,6 +151,7 @@ function renderPublicProfile(profile) {
   heading.append(createAvatar(profile.nickname, profile.avatarUrl));
   const identity = document.createElement('div');
   const nickname = document.createElement('h3'); nickname.textContent = profile.nickname;
+  nickname.dataset.i18nPreserve = '';
   const runCount = document.createElement('p');
   runCount.textContent = `${runs.length} ${runs.length === 1 ? 'run aprobada' : 'runs aprobadas'}`;
   identity.append(nickname, runCount);
@@ -538,10 +543,12 @@ function renderResources() {
     const category = document.createElement('span'); category.className = `resource-card-category resource-${resource.category.toLowerCase()}`;
     category.textContent = resourceCategoryLabel(resource.category);
     const title = document.createElement('h2'); title.textContent = resource.title;
+    title.dataset.i18nPreserve = '';
     const body = resource.category === 'MOD'
       ? document.createElement('p')
       : document.createElement('div');
     body.className = resource.category === 'MOD' ? '' : 'resource-markdown';
+    body.dataset.i18nPreserve = '';
     if (resource.category === 'MOD') body.textContent = resource.description;
     else body.append(renderMarkdown(resource.description));
     const cardHeader = document.createElement('div'); cardHeader.className = 'resource-card-header';
@@ -813,9 +820,11 @@ function renderTwitchStreams(container, streams) {
     const details = document.createElement('div'); details.className = 'twitch-card-details';
     const heading = document.createElement('div'); heading.className = 'twitch-card-heading';
     const name = document.createElement('h2'); name.textContent = stream.name;
-    const viewers = document.createElement('span'); viewers.className = 'twitch-viewers'; viewers.textContent = `${Number(stream.viewers || 0).toLocaleString('es')} viendo`;
+    name.dataset.i18nPreserve = '';
+    const viewers = document.createElement('span'); viewers.className = 'twitch-viewers'; viewers.textContent = `${Number(stream.viewers || 0).toLocaleString(window.getAppLanguage() === 'en' ? 'en' : 'es')} viendo`;
     heading.append(name, viewers);
     const title = document.createElement('p'); title.className = 'twitch-stream-title'; title.textContent = stream.title || 'Dino Crisis en directo'; title.title = stream.title || '';
+    title.dataset.i18nPreserve = '';
     const meta = document.createElement('div'); meta.className = 'twitch-card-meta';
     const game = document.createElement('span'); game.textContent = stream.game || 'Dino Crisis';
     const language = document.createElement('span'); language.textContent = stream.language ? stream.language.toUpperCase() : '';
@@ -839,17 +848,25 @@ function renderGoogleSignInButton() {
   const notice = document.querySelector('#auth-config-notice');
   if (!isGoogleConfigured) { notice.hidden = false; return; }
   notice.hidden = true;
-  if (googleButtonRendered || !window.google || !google.accounts || !google.accounts.id) return;
-  google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredentialResponse, auto_select: false });
-  google.accounts.id.renderButton(document.querySelector('#google-signin-button'), {
+  if (!window.google || !google.accounts || !google.accounts.id) return;
+  if (!googleIdentityInitialized) {
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredentialResponse, auto_select: false });
+    googleIdentityInitialized = true;
+  }
+  const language = window.getAppLanguage();
+  if (googleButtonLanguage === language) return;
+  const button = document.querySelector('#google-signin-button');
+  button.replaceChildren();
+  google.accounts.id.renderButton(button, {
     theme: 'filled_black',
     size: 'large',
     shape: 'pill',
     text: 'signin_with',
     width: 200,
     logo_alignment: 'left',
+    locale: language,
   });
-  googleButtonRendered = true;
+  googleButtonLanguage = language;
 }
 
 async function handleGoogleCredentialResponse(response) {
@@ -883,6 +900,7 @@ function activateUser(user) {
   const accountAvatar = document.querySelector('#account-avatar');
   accountAvatar.replaceChildren(createAvatar(currentUser.nickname, currentUser.avatarUrl).firstChild || document.createTextNode(initials(currentUser.nickname)));
   document.querySelector('#account-name').textContent = `${currentUser.nickname}${currentUser.role === 'moderator' ? ' · MOD' : ''}`;
+  document.querySelector('#account-name').dataset.i18nPreserve = '';
   document.querySelector('#account-box').hidden = false;
   if (currentUser.role === 'moderator') { moderationPanel.hidden = false; loadPendingRuns(); }
 }
@@ -1040,6 +1058,11 @@ render();
 switchView(location.hash === '#rules' ? 'rules' : location.hash === '#leaderboard' ? 'leaderboard' : location.hash === '#resources' ? 'resources' : 'home');
 loadLeaderboard();
 restoreSession();
+document.addEventListener('app-language-change', () => {
+  renderGoogleSignInButton();
+  render();
+  if (activeView === 'resources' && resources.length) renderResources();
+});
 window.setInterval(() => {
   if (idToken) loadNotifications(true);
   if (activeView === 'home') loadTwitchStreams(true);
