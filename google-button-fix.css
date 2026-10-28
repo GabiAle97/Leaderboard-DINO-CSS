@@ -1,0 +1,3 @@
+/* GIS renders its iframe a few pixels wider than the target button. Clip those white canvas margins. */
+.auth-controls #google-signin-button{overflow:hidden!important;border-radius:999px;isolation:isolate}
+.auth-controls #google-signin-button iframe{background:transparent!important}
