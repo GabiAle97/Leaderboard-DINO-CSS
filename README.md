@@ -12,11 +12,15 @@ Las filas y tiempos precargados son **datos ficticios de demostración**, no ré
 
 ## Login, submissions y moderación
 
-El proyecto incluye el código fuente extendido del Apps Script en `apps-script/Code.gs` y el cliente web espera las acciones `profile`, `submitRun`, `myRuns`, `pendingRuns`, `reviewRun`, `notifications`, `markNotificationsRead`, `GET?action=leaderboard` y `GET?action=twitchLive`. El script valida el ID token de Google en servidor contra su audiencia OAuth; los usuarios nuevos se agregan con rol `player`. Las runs nuevas quedan `pending`; el leaderboard público solo devuelve runs `approved`. Los moderadores se asignan manualmente en la pestaña protegida `Usuarios`, cambiando su rol a `moderator`. Nunca permitas que usuarios públicos editen esa pestaña.
+El proyecto incluye el código fuente extendido del Apps Script en `apps-script/Code.gs` y el cliente web espera las acciones `profile`, `submitRun`, `myRuns`, `pendingRuns`, `reviewRun`, `notifications`, `markNotificationsRead`, `addResource`, `GET?action=leaderboard`, `GET?action=resources` y `GET?action=twitchLive`. El script valida el ID token de Google en servidor contra su audiencia OAuth; los usuarios nuevos se agregan con rol `player`. Las runs nuevas quedan `pending`; el leaderboard público solo devuelve runs `approved`. Los moderadores se asignan manualmente en la pestaña protegida `Usuarios`, cambiando su rol a `moderator`. Nunca permitas que usuarios públicos editen esa pestaña.
 
 En el primer inicio de sesión, cada usuario debe elegir un nickname único (3–20 caracteres; letras, números, espacios o guion bajo). Puede subir una foto PNG, JPG o WEBP de hasta 400 KB; la foto se publica en Google Drive para mostrarse junto al perfil y es opcional. También puede guardar su login/URL de Twitch para que su canal aparezca en Home al transmitir, incluso si está en otra categoría. Si no elige foto, se usa la imagen de Google cuando esté disponible. La hoja `Usuarios` conserva las columnas actuales y agrega `Nickname`, `Foto de perfil` y `Twitch`.
 
 Las runs usan el nickname y la foto del perfil autenticado; no aceptan un nombre enviado desde el formulario. La sesión se conserva en `sessionStorage` y se revalida contra Apps Script tras recargar la página. Dura hasta que venza el ID token de Google (normalmente alrededor de una hora) o se cierre la pestaña/sesión. Al aprobar o rechazar una run, Apps Script escribe una notificación en `Notificaciones`; los rechazos requieren motivo.
+
+## Recursos
+
+La pestaña **Recursos** lee enlaces de la hoja `Recursos`. Los visitantes pueden consultarlos y filtrarlos por categoría; los perfiles con rol `moderator` pueden añadir recursos desde el sitio. Apps Script valida el rol, el enlace HTTPS y el contenido antes de escribir. La hoja y sus encabezados se crean automáticamente al agregar el primer recurso.
 
 ## Home: runners en Twitch
 

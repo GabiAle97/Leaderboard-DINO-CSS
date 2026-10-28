@@ -7,9 +7,12 @@ const GOOGLE_CLIENT_ID = '792269745897-7oj158lrb89u6lrgiao1g0eapriajcvj.apps.goo
 const RUNS_SHEET_NAME = 'Dino Crisis Runs';
 const USERS_SHEET_NAME = 'Usuarios';
 const NOTIFICATIONS_SHEET_NAME = 'Notificaciones';
+const RESOURCES_SHEET_NAME = 'Recursos';
 const RUN_HEADERS = ['ID', 'Fecha de envío', 'Email', 'Jugador', 'Categoría', 'Tiempo', 'Plataforma', 'Fecha de run', 'Video', 'Notas', 'Estado', 'Revisado por', 'Fecha de revisión', 'Nota de revisión'];
 const USER_HEADERS = ['Email', 'Nombre de Google', 'Rol', 'Fecha de registro', 'Nickname', 'Foto de perfil', 'Twitch'];
 const NOTIFICATION_HEADERS = ['ID', 'Email', 'Run ID', 'Tipo', 'Mensaje', 'Fecha', 'Leída'];
+const RESOURCE_HEADERS = ['ID', 'Nombre', 'Categoría', 'URL', 'Descripción', 'Agregado por', 'Fecha'];
+const RESOURCE_CATEGORIES = ['MOD', 'GUIA', 'REGLAS', 'OTRO'];
 const RUN_CATEGORIES = ['ANY%', 'BEST ENDING', 'SEGMENTED%'];
 
 function doGet(e) {
@@ -32,6 +35,9 @@ function doGet(e) {
   }
   if (action === 'twitchLive') {
     return jsonOutput_(getTwitchLiveStreams_(spreadsheet));
+  }
+  if (action === 'resources') {
+    return jsonOutput_({ resources: getResources_(spreadsheet) });
   }
 
   // Conserva el endpoint existente usado por el sitio para leer Match Details.
@@ -228,6 +234,15 @@ function doPost(e) {
         requireModerator_(user);
         errorStage = 'guardar la decisión de moderación';
         return reviewRun_(spreadsheet, identity, payload);
+      }
+      case 'addResource': {
+        errorStage = 'validar el token de Google';
+        const identity = verifyGoogleIdentity_(payload.idToken);
+        errorStage = 'comprobar permisos de moderador';
+        const user = ensureUser_(spreadsheet, identity);
+        requireModerator_(user);
+        errorStage = 'guardar el recurso';
+        return addResource_(spreadsheet, identity, payload);
       }
       default:
         return jsonOutput_({ ok: false, error: 'Acción no reconocida.' });
@@ -472,6 +487,37 @@ function getNotifications_(spreadsheet, email) {
     .reverse().slice(0, 50).map(row => ({
       id: row[0], runId: row[2], type: row[3], message: row[4], date: row[5], unread: String(row[6]).toLowerCase() !== 'true'
     }));
+}
+
+function getResources_(spreadsheet) {
+  const sheet = spreadsheet.getSheetByName(RESOURCES_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getDataRange().getDisplayValues().slice(1).filter(row => row[0]).map(row => ({
+    id: row[0], title: row[1], category: row[2], url: row[3], description: row[4], createdAt: row[6]
+  })).reverse();
+}
+
+function addResource_(spreadsheet, identity, payload) {
+  const title = cleanText_(payload.title, 80);
+  const category = String(payload.category || '').trim().toUpperCase();
+  const url = validHttpsUrl_(payload.url);
+  const description = cleanText_(payload.description, 240);
+  if (!title || !description || !url || RESOURCE_CATEGORIES.indexOf(category) === -1) {
+    throw publicError_('Completa nombre, categoría, enlace HTTPS y descripción del recurso.');
+  }
+  const sheet = ensureSheet_(spreadsheet, RESOURCES_SHEET_NAME, RESOURCE_HEADERS);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const values = sheet.getDataRange().getDisplayValues();
+    const duplicate = values.slice(1).some(row => String(row[3] || '').trim().toLowerCase() === url.toLowerCase());
+    if (duplicate) throw publicError_('Ese enlace ya está publicado en Recursos.');
+    const id = Utilities.getUuid();
+    sheet.appendRow([id, safeSheetText_(title), category, url, safeSheetText_(description), safeSheetText_(identity.email), new Date()]);
+    return jsonOutput_({ ok: true, resource: { id: id, title: title, category: category, url: url, description: description } });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function markNotificationsRead_(spreadsheet, email, notificationIds) {

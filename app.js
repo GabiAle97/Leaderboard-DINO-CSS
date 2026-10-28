@@ -21,6 +21,8 @@ let selectedCategory = 'ANY%';
 let activeView = 'home';
 let searchQuery = '';
 let runs = [...DEMO_RUNS];
+let resources = [];
+let selectedResourceFilter = 'all';
 let currentUser = null;
 let idToken = readStoredToken();
 let googleButtonRendered = false;
@@ -112,11 +114,13 @@ function showToast(message) {
   window.setTimeout(() => toast.classList.remove('show'), 3600);
 }
 function switchView(view) {
-  activeView = ['home', 'rules'].includes(view) ? view : 'leaderboard';
+  activeView = ['home', 'rules', 'resources'].includes(view) ? view : 'leaderboard';
   const isHome = activeView === 'home';
   const isLeaderboard = activeView === 'leaderboard';
+  const isResources = activeView === 'resources';
   document.querySelector('#hero').hidden = true;
   document.querySelector('#home-view').hidden = !isHome;
+  document.querySelector('#resources-view').hidden = !isResources;
   document.querySelector('#leaderboard').hidden = !isLeaderboard;
   document.querySelector('#rules').hidden = activeView !== 'rules';
   document.querySelector('#submit-banner').hidden = true;
@@ -131,6 +135,7 @@ function switchView(view) {
   });
   history.replaceState(null, '', `#${activeView}`);
   if (isHome) loadTwitchStreams();
+  if (isResources) loadResources();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function readStoredToken() {
@@ -161,6 +166,20 @@ dialog.addEventListener('click', event => { if (event.target === dialog) dialog.
 document.querySelectorAll('.category-tab').forEach(tab => tab.addEventListener('click', () => { selectedCategory = tab.dataset.category; render(); }));
 document.querySelectorAll('[data-view]').forEach(tab => tab.addEventListener('click', () => switchView(tab.dataset.view)));
 document.querySelector('#refresh-twitch').addEventListener('click', () => loadTwitchStreams(true));
+document.querySelectorAll('[data-resource-filter]').forEach(button => button.addEventListener('click', () => {
+  selectedResourceFilter = button.dataset.resourceFilter;
+  document.querySelectorAll('[data-resource-filter]').forEach(item => {
+    const active = item === button;
+    item.classList.toggle('active', active);
+    item.setAttribute('aria-selected', String(active));
+  });
+  renderResources();
+}));
+document.querySelector('#add-resource-button').addEventListener('click', openResourceDialog);
+document.querySelector('#refresh-resources').addEventListener('click', loadResources);
+document.querySelector('.resource-close').addEventListener('click', () => document.querySelector('#resource-dialog').close());
+document.querySelector('#resource-dialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+document.querySelector('#resource-form').addEventListener('submit', submitResource);
 document.querySelector('#search').addEventListener('input', event => { searchQuery = event.target.value.trim().toLowerCase(); render(); });
 document.querySelector('#my-runs-button').addEventListener('click', loadMyRuns);
 document.querySelector('#edit-profile-button').addEventListener('click', openEditProfile);
@@ -379,6 +398,120 @@ async function loadTwitchStreams(forceRefresh = false) {
   }
 }
 
+async function loadResources() {
+  const status = document.querySelector('#resource-status');
+  const container = document.querySelector('#resource-list');
+  const count = document.querySelector('#resource-count');
+  if (!SCRIPT_URL) {
+    status.textContent = 'No se pudo conectar al catálogo.';
+    renderResourceMessage(container, 'Configura Apps Script para cargar el catálogo de recursos.');
+    return;
+  }
+  status.textContent = 'Cargando catálogo de recursos…';
+  try {
+    const endpoint = new URL(SCRIPT_URL);
+    endpoint.searchParams.set('action', 'resources');
+    endpoint.searchParams.set('t', String(Date.now()));
+    const response = await fetch(endpoint, { method: 'GET', mode: 'cors', cache: 'no-store' });
+    if (!response.ok) throw new Error('No se pudo consultar la lista de recursos.');
+    const payload = await response.json();
+    if (!Array.isArray(payload.resources)) throw new Error('Actualiza el despliegue de Apps Script para activar Recursos.');
+    resources = payload.resources;
+    status.textContent = resources.length ? 'CATÁLOGO DE LA COMUNIDAD' : 'CATÁLOGO LISTO PARA RECURSOS';
+    count.textContent = `${resources.length} ${resources.length === 1 ? 'RECURSO' : 'RECURSOS'}`;
+    renderResources();
+  } catch (requestError) {
+    status.textContent = 'No se pudo cargar Recursos.';
+    renderResourceMessage(container, requestError.message);
+  }
+}
+
+function renderResourceMessage(container, message) {
+  container.replaceChildren();
+  const empty = document.createElement('div'); empty.className = 'resource-empty';
+  const icon = document.createElement('span'); icon.className = 'resource-empty-icon'; icon.textContent = '▤';
+  const text = document.createElement('p'); text.textContent = message;
+  empty.append(icon, text); container.append(empty);
+}
+
+function renderResources() {
+  const container = document.querySelector('#resource-list');
+  container.replaceChildren();
+  const visible = selectedResourceFilter === 'all'
+    ? resources
+    : resources.filter(resource => resource.category === selectedResourceFilter);
+  if (!visible.length) {
+    renderResourceMessage(container, selectedResourceFilter === 'all'
+      ? 'Todavía no hay recursos añadidos. Un moderador puede publicar aquí enlaces al mod, guías y herramientas.'
+      : 'Aún no hay recursos en esta categoría.');
+    return;
+  }
+  visible.forEach(resource => {
+    const card = document.createElement('article'); card.className = 'resource-card';
+    const category = document.createElement('span'); category.className = `resource-card-category resource-${resource.category.toLowerCase()}`;
+    category.textContent = resourceCategoryLabel(resource.category);
+    const title = document.createElement('h2'); title.textContent = resource.title;
+    const description = document.createElement('p'); description.textContent = resource.description;
+    const link = document.createElement('a'); link.className = 'button button-primary resource-open';
+    link.href = safeHttpsUrl(resource.url); link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'ABRIR RECURSO ↗';
+    const cardHeader = document.createElement('div'); cardHeader.className = 'resource-card-header';
+    const index = document.createElement('span'); index.className = 'resource-index'; index.textContent = String(resources.indexOf(resource) + 1).padStart(2, '0');
+    cardHeader.append(category, index);
+    card.append(cardHeader, title, description, link);
+    container.append(card);
+  });
+}
+
+function resourceCategoryLabel(category) {
+  return ({ MOD: 'MOD Y HERRAMIENTAS', GUIA: 'GUÍAS', REGLAS: 'REGLAS Y VERIFICACIÓN', OTRO: 'OTROS' })[category] || 'RECURSO';
+}
+
+function safeHttpsUrl(value) {
+  try { const url = new URL(value); return url.protocol === 'https:' ? url.href : '#'; }
+  catch { return '#'; }
+}
+
+function openResourceDialog() {
+  if (!idToken || !currentUser || currentUser.role !== 'moderator') {
+    showToast('Solo los moderadores pueden agregar recursos.');
+    return;
+  }
+  const form = document.querySelector('#resource-form');
+  form.reset();
+  document.querySelector('#resource-form-error').hidden = true;
+  document.querySelector('#resource-dialog').showModal();
+}
+
+async function submitResource(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.querySelector('#resource-form-error');
+  error.hidden = true;
+  if (!idToken || !currentUser || currentUser.role !== 'moderator') {
+    error.textContent = 'Se requieren permisos de moderador para publicar recursos.';
+    error.hidden = false;
+    return;
+  }
+  if (!form.reportValidity()) return;
+  const data = Object.fromEntries(new FormData(form));
+  if (!safeHttpsUrl(data.url) || safeHttpsUrl(data.url) === '#') {
+    error.textContent = 'El enlace debe comenzar con https://';
+    error.hidden = false;
+    return;
+  }
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+  try {
+    await apiPost({ action: 'addResource', idToken, title: data.title, category: data.category, url: data.url, description: data.description });
+    document.querySelector('#resource-dialog').close();
+    showToast('Recurso publicado para toda la comunidad.');
+    await loadResources();
+  } catch (requestError) {
+    error.textContent = requestError.message;
+    error.hidden = false;
+  } finally { button.disabled = false; }
+}
+
 function renderTwitchMessage(container, message) {
   container.replaceChildren();
   const empty = document.createElement('div'); empty.className = 'twitch-empty';
@@ -469,6 +602,7 @@ async function handleGoogleCredentialResponse(response) {
 
 function activateUser(user) {
   currentUser = user;
+  document.querySelector('#add-resource-button').hidden = currentUser.role !== 'moderator';
   document.querySelector('#google-signin-button').hidden = true;
   document.querySelector('#auth-config-notice').hidden = true;
   if (currentUser.needsSetup || !currentUser.nickname) {
@@ -504,6 +638,7 @@ async function restoreSession() {
 function signOut() {
   idToken = null; currentUser = null;
   clearStoredToken();
+  document.querySelector('#add-resource-button').hidden = true;
   document.querySelector('#account-box').hidden = true;
   document.querySelector('#google-signin-button').hidden = false;
   moderationPanel.hidden = true;
@@ -633,7 +768,7 @@ async function reviewRun(runId, status, button) {
 }
 
 render();
-switchView(location.hash === '#rules' ? 'rules' : location.hash === '#leaderboard' ? 'leaderboard' : 'home');
+switchView(location.hash === '#rules' ? 'rules' : location.hash === '#leaderboard' ? 'leaderboard' : location.hash === '#resources' ? 'resources' : 'home');
 loadLeaderboard();
 restoreSession();
 window.setInterval(() => {

@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="tabs.css" />
     <link rel="stylesheet" href="home.css" />
     <link rel="stylesheet" href="home-live-sources.css" />
+    <link rel="stylesheet" href="resources.css" />
     <link rel="icon" href="favicon.ico" />
   </head>
   <body>
@@ -32,6 +33,7 @@
       <nav class="top-nav" role="tablist" aria-label="Navegación principal">
         <button type="button" role="tab" aria-selected="false" data-view="home">HOME</button>
         <button class="nav-active" type="button" role="tab" aria-selected="true" data-view="leaderboard">LEADERBOARD</button>
+        <button type="button" role="tab" aria-selected="false" data-view="resources">RECURSOS</button>
         <button type="button" role="tab" aria-selected="false" data-view="rules">REGLAS</button>
       </nav>
       <div class="auth-controls">
@@ -57,6 +59,23 @@
         <div class="live-summary"><span class="live-indicator"></span><span id="twitch-status" aria-live="polite">Conectando con Twitch…</span><span id="twitch-count" class="twitch-count"></span></div>
         <div id="twitch-streams" class="twitch-streams" aria-live="polite"></div>
         <p class="twitch-footnote">Los canales del leaderboard aparecen aquí cuando vinculan su cuenta de Twitch desde Mi perfil, incluso si están jugando otro juego. Los demás resultados se basan en la categoría seleccionada en Twitch. La categoría no confirma el uso de Cutscene Skip Mod.</p>
+      </section>
+      <section class="resources-view section-wrap" id="resources-view" hidden>
+        <div class="resources-heading">
+          <div><div class="eyebrow"><i></i> KIT DE LA COMUNIDAD</div><h1>RECURSOS <span>DE RUNNING.</span></h1><p>Herramientas, guías y referencias para preparar y verificar tus runs de Dino Crisis Cutscene Skip Mod.</p></div>
+          <button type="button" class="button button-primary" id="add-resource-button" hidden>AGREGAR RECURSO <span>＋</span></button>
+        </div>
+        <div class="resource-toolbar"><span class="live-indicator"></span><span id="resource-status" aria-live="polite">Cargando recursos…</span><span id="resource-count" class="twitch-count"></span></div>
+        <div class="resource-categories" role="tablist" aria-label="Filtrar recursos">
+          <button type="button" class="resource-filter active" data-resource-filter="all" aria-selected="true">TODOS</button>
+          <button type="button" class="resource-filter" data-resource-filter="MOD" aria-selected="false">MOD Y HERRAMIENTAS</button>
+          <button type="button" class="resource-filter" data-resource-filter="GUIA" aria-selected="false">GUÍAS</button>
+          <button type="button" class="resource-filter" data-resource-filter="REGLAS" aria-selected="false">REGLAS Y VERIFICACIÓN</button>
+          <button type="button" class="resource-filter" data-resource-filter="OTRO" aria-selected="false">OTROS</button>
+          <button type="button" class="resource-refresh button button-outline" id="refresh-resources">ACTUALIZAR ↻</button>
+        </div>
+        <div id="resource-list" class="resource-list" aria-live="polite"></div>
+        <p class="resource-footnote">Los recursos externos se abren en una pestaña nueva. Si encuentras una guía o herramienta útil, compártela con el equipo moderador para añadirla aquí.</p>
       </section>
       <section class="hero" id="hero">
         <div class="hero-copy">
@@ -169,6 +188,18 @@
         <p class="profile-privacy">La foto y el canal de Twitch se muestran públicamente. El canal aparece en Home si estás en vivo y enviaste una run. Ambos son opcionales.</p>
         <p class="form-error" id="profile-error" role="alert" hidden></p>
         <div class="dialog-footer"><span>El nickname debe ser único.</span><button class="button button-primary" type="submit">GUARDAR PERFIL <span>↗</span></button></div>
+      </form>
+    </dialog>
+    <dialog id="resource-dialog" class="submit-dialog resource-dialog">
+      <form id="resource-form" novalidate>
+        <div class="dialog-header"><div><div class="eyebrow"><i></i> RECURSOS COMUNITARIOS</div><h2>AGREGA UN <span>RECURSO.</span></h2></div><button type="button" class="close-button resource-close" aria-label="Cerrar">×</button></div>
+        <p class="dialog-intro">Añade una herramienta o referencia útil. Los recursos se publican para toda la comunidad.</p>
+        <label class="field">NOMBRE *<input name="title" maxlength="80" required placeholder="Ej. Cutscene Skip Mod" /></label>
+        <label class="field">CATEGORÍA *<select name="category" required><option value="MOD">Mod y herramientas</option><option value="GUIA">Guías</option><option value="REGLAS">Reglas y verificación</option><option value="OTRO">Otros</option></select></label>
+        <label class="field">ENLACE HTTPS *<input name="url" type="url" maxlength="500" required placeholder="https://..." /></label>
+        <label class="field">DESCRIPCIÓN *<textarea name="description" rows="3" maxlength="240" required placeholder="¿Qué ofrece y para qué sirve?"></textarea></label>
+        <p id="resource-form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-footer"><span>Solo los moderadores pueden publicar recursos.</span><button class="button button-primary" type="submit">PUBLICAR RECURSO <span>↗</span></button></div>
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
