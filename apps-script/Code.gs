@@ -41,7 +41,7 @@ function doGet(e) {
           game: run.game, category: run.category, time: run.time, platform: run.platform, date: run.date, video: run.video
         };
       });
-    return jsonOutput_({ runs: publicRuns });
+    return jsonOutput_({ runs: publicRuns, supportedGames: RUN_GAMES });
   }
   if (action === 'twitchLive') {
     return jsonOutput_(getTwitchLiveStreams_(spreadsheet));
@@ -438,7 +438,7 @@ function requireModerator_(user) {
 
 function submitRun_(spreadsheet, identity, user, payload) {
   const player = cleanText_(user.nickname, 20);
-  const game = String(payload.game || DEFAULT_RUN_GAME).trim().toUpperCase();
+  const game = String(payload.game || '').trim().toUpperCase();
   const category = String(payload.category || '').trim().toUpperCase();
   const rawTime = String(payload.time || '').trim();
   const timePattern = /^(?:(\d{1,2}):)?([0-5]?\d):([0-5]\d)$/;

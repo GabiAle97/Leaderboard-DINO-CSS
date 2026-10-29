@@ -309,6 +309,12 @@ form.addEventListener('submit', event => {
   if (!idToken) { error.textContent = 'Inicia sesión con Google para enviar una run.'; error.hidden = false; return; }
   if (!form.reportValidity()) return;
   const data = Object.fromEntries(new FormData(form));
+  if (!gameLabels[data.game]) {
+    error.textContent = 'Selecciona un juego válido antes de enviar la run.';
+    error.hidden = false;
+    form.elements.game.focus();
+    return;
+  }
   const hours = Number(data.hours);
   const minutes = Number(data.minutes);
   const seconds = Number(data.seconds);
@@ -397,6 +403,17 @@ async function submitRun(submission) {
   const submitButton = form.querySelector('[type="submit"]');
   submitButton.disabled = true;
   try {
+    if (submission.game === 'DINO CRISIS MODERN EDITION') {
+      if (!SCRIPT_URL) throw new Error('Falta configurar la URL del Apps Script.');
+      const endpoint = new URL(SCRIPT_URL);
+      endpoint.searchParams.set('action', 'leaderboard');
+      const response = await fetch(endpoint, { method: 'GET', mode: 'cors', cache: 'no-store' });
+      if (!response.ok) throw new Error('No se pudo verificar la configuración de Apps Script.');
+      const payload = await response.json();
+      if (!Array.isArray(payload.supportedGames) || !payload.supportedGames.includes(submission.game)) {
+        throw new Error('Apps Script todavía no admite Modern Edition. Actualiza su despliegue antes de enviar la run; no se guardó.');
+      }
+    }
     await apiPost(submission);
     const category = submission.category;
     const game = submission.game;
