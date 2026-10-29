@@ -252,6 +252,15 @@ function doPost(e) {
         errorStage = 'guardar el recurso';
         return addResource_(spreadsheet, identity, payload);
       }
+      case 'editResource': {
+        errorStage = 'validar el token de Google';
+        const identity = verifyGoogleIdentity_(payload.idToken);
+        errorStage = 'comprobar permisos de moderador';
+        const user = ensureUser_(spreadsheet, identity);
+        requireModerator_(user);
+        errorStage = 'actualizar el recurso';
+        return editResource_(spreadsheet, payload);
+      }
       default:
         return jsonOutput_({ ok: false, error: 'Acción no reconocida.' });
     }
@@ -528,6 +537,40 @@ function addResource_(spreadsheet, identity, payload) {
     if (duplicate) throw publicError_('Ese enlace ya está publicado en Recursos.');
     const id = Utilities.getUuid();
     sheet.appendRow([id, safeSheetText_(title), category, url, safeSheetText_(description), safeSheetText_(identity.email), new Date()]);
+    return jsonOutput_({ ok: true, resource: { id: id, title: title, category: category, url: url, description: description } });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function editResource_(spreadsheet, payload) {
+  const id = String(payload.id || '').trim();
+  const title = cleanText_(payload.title, 80);
+  const category = String(payload.category || '').trim().toUpperCase();
+  const url = validHttpsUrl_(payload.url);
+  const isMod = category === 'MOD';
+  const description = isMod
+    ? cleanText_(payload.description, 240)
+    : cleanMarkdown_(payload.description);
+  if (!id || !title || !description || (!isMod && description.length > MAX_RESOURCE_MARKDOWN_LENGTH)
+    || RESOURCE_CATEGORIES.indexOf(category) === -1
+    || (payload.url && !url) || (isMod && !url)) {
+    throw publicError_('Completa nombre, categoría y contenido. El texto Markdown no puede superar 10.000 caracteres y los recursos MOD requieren un enlace HTTPS válido.');
+  }
+  const sheet = spreadsheet.getSheetByName(RESOURCES_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) throw publicError_('No se encontró el recurso que quieres editar.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const values = sheet.getDataRange().getDisplayValues();
+    const rowIndex = values.findIndex((row, index) => index > 0 && String(row[0] || '').trim() === id);
+    if (rowIndex < 1) throw publicError_('No se encontró el recurso que quieres editar. Actualiza la lista e inténtalo de nuevo.');
+    const duplicate = url && values.slice(1).some((row, index) => index + 1 !== rowIndex
+      && String(row[3] || '').trim().toLowerCase() === url.toLowerCase());
+    if (duplicate) throw publicError_('Ese enlace ya está publicado en Recursos.');
+    sheet.getRange(rowIndex + 1, 2, 1, 4).setValues([[
+      safeSheetText_(title), category, url, safeSheetText_(description)
+    ]]);
     return jsonOutput_({ ok: true, resource: { id: id, title: title, category: category, url: url, description: description } });
   } finally {
     lock.releaseLock();

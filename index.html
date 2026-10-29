@@ -203,6 +203,7 @@
       <form id="resource-form" novalidate>
         <div class="dialog-header"><div><div class="eyebrow"><i></i> RECURSOS COMUNITARIOS</div><h2>AGREGA UN <span>RECURSO.</span></h2></div><button type="button" class="close-button resource-close" aria-label="Cerrar">×</button></div>
         <p class="dialog-intro">Añade una herramienta o referencia útil. Los recursos se publican para toda la comunidad.</p>
+        <input type="hidden" name="id" />
         <label class="field">NOMBRE *<input name="title" maxlength="80" required placeholder="Ej. Cutscene Skip Mod" /></label>
         <label class="field">CATEGORÍA *<select name="category" required><option value="MOD">Mod y herramientas</option><option value="GUIA">Guías</option><option value="REGLAS">Reglas y verificación</option><option value="OTRO">Otros</option></select></label>
         <label class="field" id="resource-url-field"><span id="resource-url-label">ENLACE HTTPS *</span><input name="url" type="url" maxlength="500" required placeholder="https://..." /><span class="optional-label" id="resource-url-help" hidden>OPCIONAL</span></label>
@@ -216,7 +217,7 @@
           <p class="resource-markdown-help">Markdown: títulos, listas, tablas, citas, código, **negrita**, *cursiva* y [enlaces](https://...). El HTML no se interpreta.</p>
         </div>
         <p id="resource-form-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-footer"><span>Solo los moderadores pueden publicar recursos.</span><button class="button button-primary" type="submit">PUBLICAR RECURSO <span>↗</span></button></div>
+        <div class="dialog-footer"><span>Solo los moderadores pueden publicar recursos.</span><button id="resource-submit-button" class="button button-primary" type="submit">PUBLICAR RECURSO <span>↗</span></button></div>
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

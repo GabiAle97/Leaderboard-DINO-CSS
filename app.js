@@ -539,6 +539,32 @@ function renderResources() {
     return;
   }
   visible.forEach(resource => {
+    if (resource.category === 'GUIA') {
+      const url = safeHttpsUrl(resource.url);
+      const card = document.createElement('article');
+      card.className = 'resource-card resource-card-guide';
+      if (url !== '#') {
+        card.setAttribute('role', 'link');
+        card.tabIndex = 0;
+        card.setAttribute('aria-label', `${resource.title} (se abre en una pestaña nueva)`);
+        card.addEventListener('click', event => {
+          if (!event.target.closest('.resource-edit')) window.open(url, '_blank', 'noopener,noreferrer');
+        });
+        card.addEventListener('keydown', event => {
+          if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('.resource-edit')) {
+            event.preventDefault();
+            window.open(url, '_blank', 'noopener,noreferrer');
+          }
+        });
+      }
+      const title = document.createElement('h2');
+      title.textContent = resource.title;
+      title.dataset.i18nPreserve = '';
+      card.append(title);
+      appendResourceEditButton(card, resource);
+      container.append(card);
+      return;
+    }
     const card = document.createElement('article'); card.className = 'resource-card';
     const category = document.createElement('span'); category.className = `resource-card-category resource-${resource.category.toLowerCase()}`;
     category.textContent = resourceCategoryLabel(resource.category);
@@ -560,8 +586,24 @@ function renderResources() {
       link.href = safeHttpsUrl(resource.url); link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'ABRIR ENLACE ↗';
       card.append(link);
     }
+    appendResourceEditButton(card, resource);
     container.append(card);
   });
+}
+
+function appendResourceEditButton(card, resource) {
+  if (!idToken || !currentUser || currentUser.role !== 'moderator') return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'resource-edit button button-outline';
+  button.textContent = 'EDITAR RECURSO';
+  button.setAttribute('aria-label', `Editar ${resource.title}`);
+  button.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openResourceDialog(resource);
+  });
+  card.append(button);
 }
 
 function renderMarkdown(markdown) {
@@ -700,14 +742,26 @@ function safeHttpsUrl(value) {
   catch { return '#'; }
 }
 
-function openResourceDialog() {
+function openResourceDialog(resource = null) {
   if (!idToken || !currentUser || currentUser.role !== 'moderator') {
     showToast('Solo los moderadores pueden agregar recursos.');
     return;
   }
   resourceForm.reset();
+  resourceForm.elements.id.value = resource ? resource.id : '';
+  if (resource) {
+    resourceForm.elements.title.value = resource.title;
+    resourceForm.elements.category.value = resource.category;
+    resourceForm.elements.url.value = resource.url || '';
+    resourceForm.elements.description.value = resource.description;
+  }
   setResourceEditorMode('edit');
   updateResourceFields();
+  document.querySelector('#resource-dialog .dialog-header h2').textContent = resource ? 'EDITA EL RECURSO.' : 'AGREGA UN RECURSO.';
+  document.querySelector('#resource-submit-button').textContent = resource ? 'GUARDAR CAMBIOS ↗' : 'PUBLICAR RECURSO ↗';
+  document.querySelector('#resource-dialog .dialog-intro').textContent = resource
+    ? 'Actualiza los datos del recurso publicado para toda la comunidad.'
+    : 'Añade una herramienta o referencia útil. Los recursos se publican para toda la comunidad.';
   document.querySelector('#resource-form-error').hidden = true;
   document.querySelector('#resource-dialog').showModal();
 }
@@ -778,9 +832,10 @@ async function submitResource(event) {
   const button = form.querySelector('[type="submit"]');
   button.disabled = true;
   try {
-    await apiPost({ action: 'addResource', idToken, title: data.title, category: data.category, url: data.url, description: data.description });
+    const editing = Boolean(data.id);
+    await apiPost({ action: editing ? 'editResource' : 'addResource', idToken, id: data.id, title: data.title, category: data.category, url: data.url, description: data.description });
     document.querySelector('#resource-dialog').close();
-    showToast('Recurso publicado para toda la comunidad.');
+    showToast(editing ? 'Recurso actualizado para toda la comunidad.' : 'Recurso publicado para toda la comunidad.');
     await loadResources();
   } catch (requestError) {
     error.textContent = requestError.message;
@@ -880,6 +935,7 @@ async function handleGoogleCredentialResponse(response) {
   } catch (authError) {
     idToken = null; currentUser = null;
     clearStoredToken();
+    if (resources.length) renderResources();
     document.querySelector('#account-box').hidden = true;
     document.querySelector('#google-signin-button').hidden = false;
     showToast(authError.message);
@@ -889,6 +945,7 @@ async function handleGoogleCredentialResponse(response) {
 function activateUser(user) {
   currentUser = user;
   document.querySelector('#add-resource-button').hidden = currentUser.role !== 'moderator';
+  if (resources.length) renderResources();
   document.querySelector('#google-signin-button').hidden = true;
   document.querySelector('#auth-config-notice').hidden = true;
   if (currentUser.needsSetup || !currentUser.nickname) {
@@ -916,6 +973,7 @@ async function restoreSession() {
     loadNotifications();
   } catch {
     idToken = null; currentUser = null; clearStoredToken();
+    if (resources.length) renderResources();
     document.querySelector('#auth-config-notice').textContent = 'INICIA SESIÓN CON GOOGLE';
     document.querySelector('#google-signin-button').hidden = false;
     renderGoogleSignInButton();
@@ -926,6 +984,7 @@ function signOut() {
   idToken = null; currentUser = null;
   clearStoredToken();
   document.querySelector('#add-resource-button').hidden = true;
+  if (resources.length) renderResources();
   document.querySelector('#account-box').hidden = true;
   document.querySelector('#google-signin-button').hidden = false;
   moderationPanel.hidden = true;
