@@ -343,7 +343,7 @@ function ensureUser_(spreadsheet, identity) {
 }
 
 function publicUser_(user) {
-  return { name: user.nickname || user.name, nickname: user.nickname, avatarUrl: user.avatarUrl, twitchLogin: user.twitchLogin || '', pushExternalId: user.pushExternalId || '', role: user.role, needsSetup: user.needsSetup };
+  return { name: user.nickname || user.name, nickname: user.nickname, avatarUrl: user.avatarUrl, avatarCleanupWarning: user.avatarCleanupWarning || '', twitchLogin: user.twitchLogin || '', pushExternalId: user.pushExternalId || '', role: user.role, needsSetup: user.needsSetup };
 }
 
 function userFromRow_(row, identity) {
@@ -389,12 +389,58 @@ function saveProfile_(spreadsheet, identity, payload) {
     const latestRows = sheet.getDataRange().getValues();
     const duplicateNow = latestRows.some((row, index) => index > 0 && index !== currentRow && String(row[4] || '').trim().toLowerCase() === nickname.toLowerCase());
     if (duplicateNow) throw publicError_('Ese nickname ya está en uso. Elige otro.');
-    avatarUrl = avatarData ? saveAvatar_(identity, avatarData) : (existingAvatar || identity.picture || '');
+    const existingAvatarId = driveFileIdFromUrl_(existingAvatar);
+    avatarUrl = avatarData
+      ? saveAvatar_(identity, avatarData)
+      : (existingAvatarId ? driveAvatarUrl_(existingAvatarId) : (existingAvatar || identity.picture || ''));
     sheet.getRange(currentRow + 1, 5, 1, 3).setValues([[safeSheetText_(nickname), avatarUrl, twitchLogin]]);
   } finally {
     lock.releaseLock();
   }
-  return { email: identity.email, name: String(rows[currentRow][1] || identity.name), role: String(rows[currentRow][2] || 'player').toLowerCase(), nickname: nickname, avatarUrl: avatarUrl, twitchLogin: twitchLogin, needsSetup: false };
+  const avatarCleanupWarning = cleanupPreviousAvatars_(identity, avatarUrl, existingAvatar);
+  return { email: identity.email, name: String(rows[currentRow][1] || identity.name), role: String(rows[currentRow][2] || 'player').toLowerCase(), nickname: nickname, avatarUrl: avatarUrl, avatarCleanupWarning: avatarCleanupWarning, twitchLogin: twitchLogin, needsSetup: false };
+}
+
+function cleanupPreviousAvatars_(identity, currentAvatarUrl, previousAvatarUrl) {
+  const currentId = driveFileIdFromUrl_(currentAvatarUrl);
+  const previousId = driveFileIdFromUrl_(previousAvatarUrl);
+  let failed = false;
+  const filesToTrash = {};
+  if (previousId && previousId !== currentId) filesToTrash[previousId] = true;
+
+  ['jpg', 'png', 'webp'].forEach(extension => {
+    try {
+      const files = DriveApp.getFilesByName('avatar-' + identity.sub + '.' + extension);
+      while (files.hasNext()) {
+        const file = files.next();
+        if (file.getId() !== currentId) filesToTrash[file.getId()] = true;
+      }
+    } catch (error) {
+      failed = true;
+      console.error('Could not find replaced avatars with extension ' + extension + ': ' + (error && error.stack ? error.stack : error));
+    }
+  });
+
+  Object.keys(filesToTrash).forEach(fileId => {
+    try {
+      DriveApp.getFileById(fileId).setTrashed(true);
+    } catch (error) {
+      failed = true;
+      console.error('Could not remove replaced avatar ' + fileId + ': ' + (error && error.stack ? error.stack : error));
+    }
+  });
+  return failed ? 'La foto nueva se guardó, pero no se pudieron eliminar todas las fotos anteriores de Drive.' : '';
+}
+
+function driveFileIdFromUrl_(value) {
+  const url = String(value || '');
+  if (!/^https:\/\/drive\.google\.com\//i.test(url)) return '';
+  const match = url.match(/[?&]id=([^&#]+)/);
+  return match ? match[1] : '';
+}
+
+function driveAvatarUrl_(fileId) {
+  return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fileId) + '&sz=w256';
 }
 
 function saveAvatar_(identity, dataUrl) {
@@ -424,7 +470,7 @@ function saveAvatar_(identity, dataUrl) {
     }
     throw publicError_('Drive creó la foto, pero no permite compartirla con “Cualquier persona con el enlace”. Revisa las restricciones para compartir de la cuenta/organización. El nickname se puede guardar quitando la foto.');
   }
-  return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  return driveAvatarUrl_(file.getId());
 }
 
 function isImageSignatureValid_(bytes, type) {

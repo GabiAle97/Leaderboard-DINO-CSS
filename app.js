@@ -115,11 +115,11 @@ function render() {
 function initials(value) {
   return value.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 }
-function createAvatar(name, imageUrl) {
+function createAvatar(name, imageUrl, fallbackTarget = null) {
   const avatar = document.createElement('span'); avatar.className = 'player-avatar';
   if (imageUrl && safeImageUrl(imageUrl)) {
     const image = document.createElement('img'); image.src = safeImageUrl(imageUrl); image.alt = `Foto de ${name}`; image.loading = 'lazy';
-    image.addEventListener('error', () => { image.remove(); avatar.textContent = initials(name); }, { once: true });
+    image.addEventListener('error', () => { image.remove(); (fallbackTarget || avatar).textContent = initials(name); }, { once: true });
     avatar.append(image);
   } else avatar.textContent = initials(name);
   return avatar;
@@ -359,7 +359,7 @@ profileForm.addEventListener('submit', event => {
     profileDialog.close();
     resetProfileForm();
     activateUser(result.user); loadNotifications();
-    showToast(`Perfil listo, ${currentUser.nickname}`);
+    showToast(result.user.avatarCleanupWarning || `Perfil listo, ${currentUser.nickname}`);
   }).catch(profileRequestError => {
     profileError.textContent = profileRequestError.message; profileError.hidden = false;
   }).finally(() => { profileForm.querySelector('[type="submit"]').disabled = false; });
@@ -1125,7 +1125,8 @@ function activateUser(user) {
     return;
   }
   const accountAvatar = document.querySelector('#account-avatar');
-  accountAvatar.replaceChildren(createAvatar(currentUser.nickname, currentUser.avatarUrl).firstChild || document.createTextNode(initials(currentUser.nickname)));
+  const avatar = createAvatar(currentUser.nickname, currentUser.avatarUrl, accountAvatar);
+  accountAvatar.replaceChildren(avatar.firstChild || document.createTextNode(initials(currentUser.nickname)));
   document.querySelector('#account-name').textContent = `${currentUser.nickname}${currentUser.role === 'moderator' ? ' · MOD' : ''}`;
   document.querySelector('#account-name').dataset.i18nPreserve = '';
   document.querySelector('#account-box').hidden = false;
