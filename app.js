@@ -264,6 +264,8 @@ document.querySelector('#refresh-resources').addEventListener('click', loadResou
 document.querySelector('.resource-close').addEventListener('click', () => document.querySelector('#resource-dialog').close());
 document.querySelector('#resource-dialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
 document.querySelector('#resource-form').addEventListener('submit', submitResource);
+document.querySelector('.resource-view-close').addEventListener('click', () => document.querySelector('#resource-view-dialog').close());
+document.querySelector('#resource-view-dialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
 resourceForm.elements.category.addEventListener('change', updateResourceFields);
 document.querySelector('#resource-edit-tab').addEventListener('click', () => setResourceEditorMode('edit'));
 resourcePreviewTab.addEventListener('click', () => setResourceEditorMode('preview'));
@@ -540,23 +542,20 @@ function renderResources() {
   }
   visible.forEach(resource => {
     if (['GUIA', 'REGLAS', 'OTRO'].includes(resource.category)) {
-      const url = safeHttpsUrl(resource.url);
       const card = document.createElement('article');
       card.className = 'resource-card resource-card-link';
-      if (url !== '#') {
-        card.setAttribute('role', 'link');
-        card.tabIndex = 0;
-        card.setAttribute('aria-label', `${resource.title} (se abre en una pestaña nueva)`);
-        card.addEventListener('click', event => {
-          if (!event.target.closest('.resource-edit')) window.open(url, '_blank', 'noopener,noreferrer');
-        });
-        card.addEventListener('keydown', event => {
-          if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('.resource-edit')) {
-            event.preventDefault();
-            window.open(url, '_blank', 'noopener,noreferrer');
-          }
-        });
-      }
+      card.setAttribute('role', 'button');
+      card.tabIndex = 0;
+      card.setAttribute('aria-label', `Abrir recurso: ${resource.title}`);
+      card.addEventListener('click', event => {
+        if (!event.target.closest('.resource-edit')) openResourceViewer(resource);
+      });
+      card.addEventListener('keydown', event => {
+        if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('.resource-edit')) {
+          event.preventDefault();
+          openResourceViewer(resource);
+        }
+      });
       const title = document.createElement('h2');
       title.textContent = resource.title;
       title.dataset.i18nPreserve = '';
@@ -589,6 +588,25 @@ function renderResources() {
     appendResourceEditButton(card, resource);
     container.append(card);
   });
+}
+
+function openResourceViewer(resource) {
+  const dialog = document.querySelector('#resource-view-dialog');
+  document.querySelector('#resource-view-title').textContent = resource.title;
+  document.querySelector('#resource-view-category').textContent = resourceCategoryLabel(resource.category);
+  const content = document.querySelector('#resource-view-content');
+  content.replaceChildren(renderMarkdown(resource.description));
+  const link = document.querySelector('#resource-view-link');
+  const url = safeHttpsUrl(resource.url);
+  link.hidden = url === '#';
+  if (url !== '#') {
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+  } else {
+    link.removeAttribute('href');
+  }
+  dialog.showModal();
 }
 
 function appendResourceEditButton(card, resource) {

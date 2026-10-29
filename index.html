@@ -220,6 +220,11 @@
         <div class="dialog-footer"><span>Solo los moderadores pueden publicar recursos.</span><button id="resource-submit-button" class="button button-primary" type="submit">PUBLICAR RECURSO <span>↗</span></button></div>
       </form>
     </dialog>
+    <dialog id="resource-view-dialog" class="submit-dialog resource-dialog resource-view-dialog" aria-labelledby="resource-view-title">
+      <div class="dialog-header"><div><div class="eyebrow"><i></i> <span id="resource-view-category"></span></div><h2 id="resource-view-title"></h2></div><button type="button" class="close-button resource-view-close" aria-label="Cerrar recurso">×</button></div>
+      <div id="resource-view-content" class="resource-markdown resource-view-content"></div>
+      <a id="resource-view-link" class="button button-primary resource-view-link" hidden>ABRIR ENLACE ↗</a>
+    </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="https://accounts.google.com/gsi/client" async defer onload="window.renderGoogleSignInButton && window.renderGoogleSignInButton()"></script>
     <script src="config.js"></script>

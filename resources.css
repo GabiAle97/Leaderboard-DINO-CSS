@@ -6,3 +6,4 @@
 .resource-card-link h2{margin:0}
 .resource-card-link:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
 .resource-edit{align-self:flex-start;margin-top:auto;padding:8px 10px;font-size:8px}.resource-card-link .resource-edit{position:absolute;right:12px;bottom:12px}
+.resource-card-link{cursor:pointer}.resource-view-dialog{width:min(720px,calc(100% - 28px));max-height:88vh;overflow:auto}.resource-view-dialog .dialog-header h2{margin:8px 0 0;color:#e8f0fa;font:600 clamp(23px,5vw,34px)/1.1 var(--display);overflow-wrap:anywhere}.resource-view-content{margin:20px 0 0;font-size:12px}.resource-view-link{display:inline-flex;margin-top:8px}
