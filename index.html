@@ -208,7 +208,7 @@
         <p class="dialog-intro" id="profile-dialog-intro">Tu nickname aparecerá en el leaderboard y se asociará automáticamente a todas tus runs.</p>
         <label class="field">NICKNAME *<input name="nickname" minlength="3" maxlength="20" required autocomplete="nickname" placeholder="Ej. ReginaRunner" pattern="[A-Za-z0-9_ ]{3,20}" /></label>
         <label class="field">CANAL DE TWITCH <span class="optional-label">OPCIONAL · PARA APARECER EN HOME CUANDO ESTÉS EN VIVO</span><input name="twitchLogin" maxlength="100" autocomplete="url" placeholder="twitch.tv/tu_canal" /></label>
-        <label class="field profile-photo-field">FOTO DE PERFIL <span class="optional-label">OPCIONAL · PNG, JPG O WEBP · MÁX. 400 KB</span><input name="avatar" type="file" accept="image/png,image/jpeg,image/webp" /><span id="avatar-file-name">Sin foto seleccionada</span></label>
+        <div class="field profile-photo-field"><label for="profile-avatar">FOTO DE PERFIL <span class="optional-label">OPCIONAL · PNG, JPG O WEBP · MÁX. 400 KB</span></label><input id="profile-avatar" name="avatar" type="file" accept="image/png,image/jpeg,image/webp" /><span id="avatar-file-name">Sin foto seleccionada</span><button type="button" class="button button-outline" id="remove-avatar-button" hidden>QUITAR FOTO</button></div>
         <p class="profile-privacy">La foto y el canal de Twitch se muestran públicamente. El canal aparece en Home si estás en vivo y enviaste una run. Ambos son opcionales.</p>
         <p class="form-error" id="profile-error" role="alert" hidden></p>
         <div class="dialog-footer"><span>El nickname debe ser único.</span><button class="button button-primary" type="submit">GUARDAR PERFIL <span>↗</span></button></div>

@@ -142,6 +142,7 @@
     'OPCIONAL · PARA APARECER EN HOME CUANDO ESTÉS EN VIVO': 'OPTIONAL · TO APPEAR ON HOME WHEN LIVE',
     'twitch.tv/tu_canal': 'twitch.tv/your_channel',
     'FOTO DE PERFIL': 'PROFILE PICTURE',
+    'QUITAR FOTO': 'REMOVE PHOTO',
     'OPCIONAL · PNG, JPG O WEBP · MÁX. 400 KB': 'OPTIONAL · PNG, JPG, OR WEBP · MAX 400 KB',
     'Sin foto seleccionada': 'No picture selected',
     'La foto y el canal de Twitch se muestran públicamente. El canal aparece en Home si estás en vivo y enviaste una run. Ambos son opcionales.': 'Your picture and Twitch channel are public. Your channel appears on Home when you are live and have submitted a run. Both are optional.',

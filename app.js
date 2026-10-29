@@ -365,8 +365,18 @@ profileForm.addEventListener('submit', event => {
   }).finally(() => { profileForm.querySelector('[type="submit"]').disabled = false; });
 });
 
-avatarFile.addEventListener('change', () => {
-  document.querySelector('#avatar-file-name').textContent = avatarFile.files[0]?.name || 'Sin foto seleccionada';
+const avatarFileName = document.querySelector('#avatar-file-name');
+const removeAvatarButton = document.querySelector('#remove-avatar-button');
+function updateSelectedAvatar() {
+  const file = avatarFile.files[0];
+  avatarFileName.textContent = file?.name || 'Sin foto seleccionada';
+  removeAvatarButton.hidden = !file;
+}
+avatarFile.addEventListener('change', updateSelectedAvatar);
+removeAvatarButton.addEventListener('click', () => {
+  avatarFile.value = '';
+  updateSelectedAvatar();
+  profileError.hidden = true;
 });
 profileDialog.querySelector('.profile-close-button').addEventListener('click', () => profileDialog.close());
 profileDialog.addEventListener('click', event => { if (event.target === profileDialog && currentUser && !currentUser.needsSetup) profileDialog.close(); });
@@ -380,7 +390,8 @@ function openEditProfile() {
   profileForm.elements.nickname.value = currentUser.nickname || '';
   profileForm.elements.twitchLogin.value = currentUser.twitchLogin || '';
   avatarFile.value = '';
-  document.querySelector('#avatar-file-name').textContent = currentUser.avatarUrl ? 'Foto actual · elige otra para reemplazarla' : 'Sin foto seleccionada';
+  updateSelectedAvatar();
+  avatarFileName.textContent = currentUser.avatarUrl ? 'Foto actual · elige otra para reemplazarla' : 'Sin foto seleccionada';
   document.querySelector('#profile-dialog-eyebrow').textContent = 'AJUSTES DE CUENTA';
   document.querySelector('#profile-dialog-title').innerHTML = 'EDITA TU <span>PERFIL.</span>';
   document.querySelector('#profile-dialog-intro').textContent = 'Actualiza tu nickname o cambia tu foto. Si no eliges otra imagen, se conserva la actual.';
@@ -391,7 +402,7 @@ function openEditProfile() {
 
 function resetProfileForm() {
   profileForm.reset();
-  document.querySelector('#avatar-file-name').textContent = 'Sin foto seleccionada';
+  updateSelectedAvatar();
   document.querySelector('#profile-dialog-eyebrow').textContent = 'CONFIGURA TU PERFIL';
   document.querySelector('#profile-dialog-title').innerHTML = 'ELIGE TU <span>NICKNAME.</span>';
   document.querySelector('#profile-dialog-intro').textContent = 'Tu nickname aparecerá en el leaderboard y se asociará automáticamente a todas tus runs.';
