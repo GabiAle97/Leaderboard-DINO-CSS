@@ -539,10 +539,10 @@ function renderResources() {
     return;
   }
   visible.forEach(resource => {
-    if (resource.category === 'GUIA') {
+    if (['GUIA', 'REGLAS', 'OTRO'].includes(resource.category)) {
       const url = safeHttpsUrl(resource.url);
       const card = document.createElement('article');
-      card.className = 'resource-card resource-card-guide';
+      card.className = 'resource-card resource-card-link';
       if (url !== '#') {
         card.setAttribute('role', 'link');
         card.tabIndex = 0;
