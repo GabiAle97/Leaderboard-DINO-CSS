@@ -300,7 +300,11 @@ function verifyGoogleIdentity_(idToken) {
 // propietario los permisos de hoja y de solicitudes externas (UrlFetchApp).
 function authorizeRunArchive() {
   SpreadsheetApp.getActiveSpreadsheet().getId();
-  DriveApp.getRootFolder().getId();
+  const testFile = DriveApp.createFile(
+    'run-archive-drive-write-test-' + Utilities.getUuid() + '.txt',
+    'Temporary Drive permission test.'
+  );
+  testFile.setTrashed(true);
   UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=authorization-check', {
     method: 'get', muteHttpExceptions: true
   });
