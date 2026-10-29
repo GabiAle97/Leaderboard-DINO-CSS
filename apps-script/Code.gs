@@ -456,6 +456,7 @@ function submitRun_(spreadsheet, identity, user, payload) {
   const sheet = ensureSheet_(spreadsheet, RUNS_SHEET_NAME, RUN_HEADERS);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let submittedRun;
   try {
     const id = Utilities.getUuid();
     sheet.appendRow([
@@ -463,9 +464,62 @@ function submitRun_(spreadsheet, identity, user, payload) {
       'PC', runDate, video, safeSheetText_(notes), 'pending', '', '', ''
     ]);
     cache.put(rateKey, '1', 15);
-    return jsonOutput_({ ok: true, run: { id: id, player: player, category: category, time: time, platform: 'PC', date: runDate, video: video, status: 'pending' } });
+    submittedRun = { id: id, player: player, category: category, time: time, platform: 'PC', date: runDate, video: video, status: 'pending' };
   } finally {
     lock.releaseLock();
+  }
+  try {
+    notifyModeratorsOfPendingRun_(spreadsheet, submittedRun);
+  } catch (error) {
+    console.error('Could not notify moderators about pending run ' + submittedRun.id + ': ' + (error && error.stack ? error.stack : error));
+  }
+  return jsonOutput_({ ok: true, run: submittedRun });
+}
+
+function notifyModeratorsOfPendingRun_(spreadsheet, run) {
+  const usersSheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
+  if (!usersSheet || usersSheet.getLastRow() < 2) return;
+  const moderators = usersSheet.getDataRange().getDisplayValues().slice(1)
+    .filter(row => String(row[2] || '').trim().toLowerCase() === 'moderator' && String(row[0] || '').trim())
+    .map(row => ({ email: String(row[0]).trim().toLowerCase(), externalId: String(row[7] || '').trim() }));
+  if (!moderators.length) return;
+
+  const notificationSheet = ensureSheet_(spreadsheet, NOTIFICATIONS_SHEET_NAME, NOTIFICATION_HEADERS);
+  const message = 'Nueva run pendiente de ' + run.player + ' (' + run.category + ', ' + run.time + ').';
+  const now = new Date();
+  moderators.forEach(moderator => notificationSheet.appendRow([
+    Utilities.getUuid(), safeSheetText_(moderator.email), run.id, 'pending', message, now, false
+  ]));
+  sendPendingRunPush_(moderators.map(moderator => moderator.externalId).filter(Boolean), run);
+}
+
+function sendPendingRunPush_(externalIds, run) {
+  const properties = PropertiesService.getScriptProperties();
+  const appId = String(properties.getProperty('ONESIGNAL_APP_ID') || '').trim();
+  const apiKey = String(properties.getProperty('ONESIGNAL_API_KEY') || '').trim();
+  if (!appId || !apiKey || !externalIds.length) return;
+  try {
+    const response = UrlFetchApp.fetch('https://api.onesignal.com/notifications', {
+      method: 'post', contentType: 'application/json',
+      headers: { Authorization: 'Key ' + apiKey },
+      payload: JSON.stringify({
+        app_id: appId,
+        target_channel: 'push',
+        include_aliases: { external_id: externalIds },
+        headings: { en: 'Run waiting for review', es: 'Run pendiente de revisión' },
+        contents: {
+          en: run.player + ' submitted ' + run.category + ' (' + run.time + ').',
+          es: run.player + ' envió ' + run.category + ' (' + run.time + ').'
+        },
+        url: 'https://gabiale97.github.io/dinolb/#leaderboard'
+      }),
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+      console.error('OneSignal moderator push failed (' + response.getResponseCode() + '): ' + response.getContentText().slice(0, 500));
+    }
+  } catch (error) {
+    console.error('OneSignal moderator push request failed: ' + (error && error.stack ? error.stack : error));
   }
 }
 

@@ -1163,8 +1163,9 @@ function renderNotifications(notifications) {
   notifications.forEach(item => {
     const card = document.createElement('article');
     card.className = `notification-card${item.unread ? ' notification-unread' : ''}`;
-    const state = document.createElement('span'); state.className = `notification-state ${item.type === 'approved' ? 'approved' : 'rejected'}`;
-    state.textContent = item.type === 'approved' ? 'APROBADA' : 'RECHAZADA';
+    const state = document.createElement('span');
+    state.className = `notification-state ${item.type === 'approved' ? 'approved' : item.type === 'pending' ? 'pending' : 'rejected'}`;
+    state.textContent = item.type === 'approved' ? 'APROBADA' : item.type === 'pending' ? 'RUN PENDIENTE' : 'RECHAZADA';
     const message = document.createElement('p'); message.textContent = item.message;
     const date = document.createElement('time'); date.textContent = item.date;
     card.append(state, message, date); notificationsList.append(card);
@@ -1242,6 +1243,9 @@ document.addEventListener('app-language-change', () => {
   if (activeView === 'resources' && resources.length) renderResources();
 });
 window.setInterval(() => {
-  if (idToken) loadNotifications(true);
+  if (idToken) {
+    loadNotifications(true);
+    if (currentUser && currentUser.role === 'moderator') loadPendingRuns();
+  }
   if (activeView === 'home') loadTwitchStreams(true);
 }, 120000);

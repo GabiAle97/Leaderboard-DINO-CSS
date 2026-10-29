@@ -8,6 +8,7 @@
     'MI PERFIL': 'MY PROFILE',
     'MIS RUNS': 'MY RUNS',
     'AVISOS': 'NOTIFICATIONS',
+    'RUN PENDIENTE': 'RUN PENDING',
     'ACTIVAR PUSH': 'ENABLE PUSH',
     'DESACTIVAR PUSH': 'DISABLE PUSH',
     'Notificaciones push desactivadas.': 'Push notifications disabled.',
