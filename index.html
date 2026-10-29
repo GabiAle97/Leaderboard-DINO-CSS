@@ -152,16 +152,27 @@
       <section class="rules-section section-wrap" id="rules">
         <div class="rules-heading">
           <div><div class="eyebrow"><i></i> ESTÁNDARES DE VERIFICACIÓN</div><h2>REGLAS DE <span>LA COMUNIDAD</span></h2></div>
-          <p>Las reglas 01–05 aplican a ambos juegos. Las reglas 06–07 son específicas de Dino Crisis Cutscene Skip Mod.</p>
+          <p>Selecciona un juego para consultar sus reglas de verificación.</p>
         </div>
-        <ol class="rules-list">
+        <div class="game-tabs rules-game-tabs" role="tablist" aria-label="Juego para ver sus reglas">
+          <button type="button" class="game-tab active" role="tab" id="cutscene-rules-tab" aria-selected="true" aria-controls="cutscene-rules" data-rules-game="DINO CRISIS CUTSCENE SKIP MOD">DINO CRISIS · CUTSCENE SKIP MOD</button>
+          <button type="button" class="game-tab" role="tab" id="modern-rules-tab" aria-selected="false" aria-controls="modern-rules" data-rules-game="DINO CRISIS MODERN EDITION">DINO CRISIS · MODERN EDITION</button>
+        </div>
+        <ol class="rules-list" id="cutscene-rules" role="tabpanel" aria-labelledby="cutscene-rules-tab">
           <li><span class="rule-number">01</span><div><strong>Audio del juego activado</strong><p>El sonido del juego debe ser audible en el video; no se aceptan runs con el audio del juego muteado.</p></div></li>
           <li><span class="rule-number">02</span><div><strong>IGT visible en la pantalla final</strong><p>La pantalla final del juego debe quedar visible y mostrar el tiempo en juego (IGT).</p></div></li>
           <li><span class="rule-number">03</span><div><strong>Video dedicado a una sola run</strong><p>El video enviado debe contener únicamente la run completa, desde el inicio hasta el final. No se aceptan VODs de streams completos ni videos con segmentos de inicio o cierre ajenos a la run.</p></div></li>
           <li><span class="rule-number">04</span><div><strong>Sin música de fondo</strong><p>No se permite música añadida de fondo durante la run.</p></div></li>
           <li><span class="rule-number">05</span><div><strong>Pausas limitadas</strong><p>No se permiten pausas de más de 2 minutos durante una run.</p></div></li>
-          <li data-game-scope="DINO CRISIS CUTSCENE SKIP MOD"><span class="rule-number">06</span><div><strong>Metadata del mod visible</strong><p>La metadata generada por Cutscene Skip Mod debe aparecer en la grabación. En OBS, añade la ventana <em>Dino Crisis skip status</em> como fuente.</p></div></li>
-          <li data-game-scope="DINO CRISIS CUTSCENE SKIP MOD"><span class="rule-number">07</span><div><strong>Inputs visibles para runs sub-35</strong><p>Si el tiempo final es inferior a 35 minutos, la grabación debe mostrar los inputs en pantalla durante la run.</p></div></li>
+          <li><span class="rule-number">06</span><div><strong>Metadata del mod visible</strong><p>La metadata generada por Cutscene Skip Mod debe aparecer en la grabación. En OBS, añade la ventana <em>Dino Crisis skip status</em> como fuente.</p></div></li>
+          <li><span class="rule-number">07</span><div><strong>Inputs visibles para runs sub-35</strong><p>Si el tiempo final es inferior a 35 minutos, la grabación debe mostrar los inputs en pantalla durante la run.</p></div></li>
+        </ol>
+        <ol class="rules-list" id="modern-rules" role="tabpanel" aria-labelledby="modern-rules-tab" hidden>
+          <li><span class="rule-number">01</span><div><strong>Audio del juego activado</strong><p>El sonido del juego debe ser audible en el video; no se aceptan runs con el audio del juego muteado.</p></div></li>
+          <li><span class="rule-number">02</span><div><strong>IGT visible en la pantalla final</strong><p>La pantalla final del juego debe quedar visible y mostrar el tiempo en juego (IGT).</p></div></li>
+          <li><span class="rule-number">03</span><div><strong>Video dedicado a una sola run</strong><p>El video enviado debe contener únicamente la run completa, desde el inicio hasta el final. No se aceptan VODs de streams completos ni videos con segmentos de inicio o cierre ajenos a la run.</p></div></li>
+          <li><span class="rule-number">04</span><div><strong>Sin música de fondo</strong><p>No se permite música añadida de fondo durante la run.</p></div></li>
+          <li><span class="rule-number">05</span><div><strong>Pausas limitadas</strong><p>No se permiten pausas de más de 2 minutos durante una run.</p></div></li>
         </ol>
       </section>
 

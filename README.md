@@ -6,7 +6,7 @@ Prototipo web responsive para registrar y explorar runs de **Dino Crisis Cutscen
 
 Sirve la carpeta desde un origen HTTP/HTTPS local o publicado; el inicio de sesión de Google no funciona desde `file://`. No requiere dependencias de npm. Las submissions se guardan en Google Sheets cuando se configure y despliegue el Apps Script. La plataforma aceptada es exclusivamente PC.
 
-La interfaz está disponible en español e inglés. El idioma inicial se detecta desde las preferencias del navegador; se puede cambiar con el selector `ES / EN` del encabezado y la elección queda guardada en el navegador. Las categorías se comparten entre ambos juegos, pero las tablas y los tiempos se mantienen separados. Las reglas generales de audio, IGT, video, música y pausas aplican a ambos; los requisitos de metadata e inputs sub-35 aplican solo a Cutscene Skip Mod.
+La interfaz está disponible en español e inglés. El idioma inicial se detecta desde las preferencias del navegador; se puede cambiar con el selector `ES / EN` del encabezado y la elección queda guardada en el navegador. Las categorías se comparten entre ambos juegos, pero las tablas y los tiempos se mantienen separados. La sección de reglas tiene pestañas independientes por juego: Cutscene Skip Mod incluye sus requisitos de metadata e inputs sub-35 además de las reglas generales; Modern Edition muestra las reglas generales.
 
 ## Leaderboard
 

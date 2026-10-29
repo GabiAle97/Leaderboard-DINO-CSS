@@ -17,6 +17,7 @@ const descriptions = {
 };
 let selectedCategory = 'ANY%';
 let selectedGame = defaultGame;
+let selectedRulesGame = defaultGame;
 let activeView = 'home';
 let searchQuery = '';
 let runs = [];
@@ -103,9 +104,13 @@ function render() {
     tab.classList.toggle('active', active); tab.setAttribute('aria-selected', String(active));
   });
   document.querySelector('#selected-game-label').textContent = gameLabels[selectedGame];
-  document.querySelectorAll('[data-game-scope]').forEach(rule => {
-    rule.hidden = rule.dataset.gameScope !== selectedGame;
+  document.querySelectorAll('[data-rules-game]').forEach(tab => {
+    const active = tab.dataset.rulesGame === selectedRulesGame;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
   });
+  document.querySelector('#cutscene-rules').hidden = selectedRulesGame !== defaultGame;
+  document.querySelector('#modern-rules').hidden = selectedRulesGame !== 'DINO CRISIS MODERN EDITION';
 }
 function initials(value) {
   return value.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
@@ -266,6 +271,10 @@ document.querySelector('.close-button').addEventListener('click', () => dialog.c
 dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
 document.querySelectorAll('.category-tab').forEach(tab => tab.addEventListener('click', () => { selectedCategory = tab.dataset.category; render(); }));
 document.querySelectorAll('[data-game]').forEach(tab => tab.addEventListener('click', () => { selectedGame = tab.dataset.game; render(); }));
+document.querySelectorAll('[data-rules-game]').forEach(tab => tab.addEventListener('click', () => {
+  selectedRulesGame = tab.dataset.rulesGame;
+  render();
+}));
 document.querySelectorAll('[data-view]').forEach(tab => tab.addEventListener('click', () => switchView(tab.dataset.view)));
 document.querySelector('#refresh-twitch').addEventListener('click', () => loadTwitchStreams(true));
 document.querySelectorAll('[data-resource-filter]').forEach(button => button.addEventListener('click', () => {
