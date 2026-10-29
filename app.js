@@ -429,46 +429,71 @@ async function apiPost(payload) {
   return result;
 }
 
-let oneSignalInitialized = false;
+let oneSignalState = 'idle';
 function initializeOneSignal() {
   const button = document.querySelector('#push-notifications-button');
   if (!ONESIGNAL_APP_ID) {
     button.hidden = true;
     return;
   }
-  button.hidden = !currentUser;
+  if (oneSignalState === 'failed') {
+    button.hidden = true;
+    return;
+  }
+  if (oneSignalState === 'ready') {
+    syncOneSignalIdentity();
+    return;
+  }
+  if (oneSignalState === 'initializing') return;
+  oneSignalState = 'initializing';
+  button.hidden = true;
   window.OneSignalDeferred.push(async OneSignal => {
     try {
-      if (!oneSignalInitialized) {
-        await OneSignal.init({
-          appId: ONESIGNAL_APP_ID,
-          serviceWorkerPath: CONFIG.oneSignalServiceWorkerPath || 'OneSignalSDKWorker.js',
-          serviceWorkerParam: { scope: '/dinolb/' },
-          autoResubscribe: true,
-          welcomeNotification: { disable: true },
-        });
-        oneSignalInitialized = true;
-        OneSignal.User.PushSubscription.addEventListener('change', updatePushButton);
-      }
-      if (currentUser && currentUser.pushExternalId) await OneSignal.login(currentUser.pushExternalId);
+      await OneSignal.init({
+        appId: ONESIGNAL_APP_ID,
+        serviceWorkerPath: CONFIG.oneSignalServiceWorkerPath || 'OneSignalSDKWorker.js',
+        serviceWorkerParam: { scope: '/dinolb/' },
+        autoResubscribe: true,
+        welcomeNotification: { disable: true },
+      });
+      oneSignalState = 'ready';
+      OneSignal.User.PushSubscription.addEventListener('change', updatePushButton);
+      await syncOneSignalIdentity(OneSignal);
       updatePushButton();
     } catch (error) {
-      console.warn('OneSignal initialization failed', error);
+      oneSignalState = 'failed';
+      button.hidden = true;
+      console.warn('OneSignal no está listo. Comprueba que Web Push esté habilitado en el dashboard y que la URL del sitio sea https://gabiale97.github.io.', error);
+    }
+  });
+}
+
+function syncOneSignalIdentity(instance) {
+  if (oneSignalState !== 'ready') return;
+  window.OneSignalDeferred.push(async OneSignal => {
+    try {
+      const activeOneSignal = instance || OneSignal;
+      if (currentUser && currentUser.pushExternalId) await activeOneSignal.login(currentUser.pushExternalId);
+      updatePushButton();
+    } catch (error) {
+      console.warn('No se pudo vincular la sesión de OneSignal.', error);
     }
   });
 }
 
 function syncPushIdentity() {
   const button = document.querySelector('#push-notifications-button');
-  button.hidden = !ONESIGNAL_APP_ID || !currentUser;
+  button.hidden = !ONESIGNAL_APP_ID || !currentUser || oneSignalState !== 'ready';
   if (!button.hidden) initializeOneSignal();
+  else if (ONESIGNAL_APP_ID && currentUser) initializeOneSignal();
 }
 
 function updatePushButton() {
-  if (!oneSignalInitialized) return;
+  if (oneSignalState !== 'ready') return;
   window.OneSignalDeferred.push(OneSignal => {
     const button = document.querySelector('#push-notifications-button');
     if (!currentUser) { button.hidden = true; return; }
+    button.hidden = false;
     const subscribed = OneSignal.User.PushSubscription.optedIn;
     button.textContent = subscribed ? 'DESACTIVAR PUSH' : 'ACTIVAR PUSH';
     button.setAttribute('aria-pressed', String(Boolean(subscribed)));
@@ -477,7 +502,7 @@ function updatePushButton() {
 
 async function togglePushSubscription() {
   const button = document.querySelector('#push-notifications-button');
-  if (!ONESIGNAL_APP_ID || !currentUser) return;
+  if (!ONESIGNAL_APP_ID || !currentUser || oneSignalState !== 'ready') return;
   button.disabled = true;
   window.OneSignalDeferred.push(async OneSignal => {
     try {
