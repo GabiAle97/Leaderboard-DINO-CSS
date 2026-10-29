@@ -1,6 +1,8 @@
+window.OneSignalDeferred = window.OneSignalDeferred || [];
 const CONFIG = window.RUN_ARCHIVE_CONFIG || {};
 const SCRIPT_URL = CONFIG.appsScriptUrl || '';
 const GOOGLE_CLIENT_ID = CONFIG.googleClientId || '';
+const ONESIGNAL_APP_ID = CONFIG.oneSignalAppId || '';
 const SESSION_STORAGE_KEY = 'dino-crisis-google-session-v1';
 const isGoogleConfigured = GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith('REPLACE_WITH_');
 const descriptions = {
@@ -278,6 +280,7 @@ document.querySelector('#edit-profile-button').addEventListener('click', openEdi
 document.querySelector('.public-profile-close').addEventListener('click', () => publicProfileDialog.close());
 publicProfileDialog.addEventListener('click', event => { if (event.target === publicProfileDialog) publicProfileDialog.close(); });
 document.querySelector('#notifications-button').addEventListener('click', toggleNotifications);
+document.querySelector('#push-notifications-button').addEventListener('click', togglePushSubscription);
 document.querySelector('#sign-out-button').addEventListener('click', signOut);
 document.querySelector('#refresh-pending').addEventListener('click', loadPendingRuns);
 document.addEventListener('keydown', event => {
@@ -424,6 +427,75 @@ async function apiPost(payload) {
     throw new Error(result.requestId ? `${message} (ref. ${result.requestId})` : message);
   }
   return result;
+}
+
+let oneSignalInitialized = false;
+function initializeOneSignal() {
+  const button = document.querySelector('#push-notifications-button');
+  if (!ONESIGNAL_APP_ID) {
+    button.hidden = true;
+    return;
+  }
+  button.hidden = !currentUser;
+  window.OneSignalDeferred.push(async OneSignal => {
+    try {
+      if (!oneSignalInitialized) {
+        await OneSignal.init({
+          appId: ONESIGNAL_APP_ID,
+          serviceWorkerPath: CONFIG.oneSignalServiceWorkerPath || 'OneSignalSDKWorker.js',
+          serviceWorkerParam: { scope: '/dinolb/' },
+          autoResubscribe: true,
+          welcomeNotification: { disable: true },
+        });
+        oneSignalInitialized = true;
+        OneSignal.User.PushSubscription.addEventListener('change', updatePushButton);
+      }
+      if (currentUser && currentUser.pushExternalId) await OneSignal.login(currentUser.pushExternalId);
+      updatePushButton();
+    } catch (error) {
+      console.warn('OneSignal initialization failed', error);
+    }
+  });
+}
+
+function syncPushIdentity() {
+  const button = document.querySelector('#push-notifications-button');
+  button.hidden = !ONESIGNAL_APP_ID || !currentUser;
+  if (!button.hidden) initializeOneSignal();
+}
+
+function updatePushButton() {
+  if (!oneSignalInitialized) return;
+  window.OneSignalDeferred.push(OneSignal => {
+    const button = document.querySelector('#push-notifications-button');
+    if (!currentUser) { button.hidden = true; return; }
+    const subscribed = OneSignal.User.PushSubscription.optedIn;
+    button.textContent = subscribed ? 'DESACTIVAR PUSH' : 'ACTIVAR PUSH';
+    button.setAttribute('aria-pressed', String(Boolean(subscribed)));
+  });
+}
+
+async function togglePushSubscription() {
+  const button = document.querySelector('#push-notifications-button');
+  if (!ONESIGNAL_APP_ID || !currentUser) return;
+  button.disabled = true;
+  window.OneSignalDeferred.push(async OneSignal => {
+    try {
+      if (OneSignal.User.PushSubscription.optedIn) {
+        await OneSignal.User.PushSubscription.optOut();
+        showToast('Notificaciones push desactivadas.');
+      } else {
+        await OneSignal.User.PushSubscription.optIn();
+        showToast(OneSignal.User.PushSubscription.optedIn
+          ? 'Notificaciones push activadas en este dispositivo.'
+          : 'No se activaron las notificaciones. Revisa los permisos del navegador.');
+      }
+      updatePushButton();
+    } catch (error) {
+      console.warn('OneSignal subscription update failed', error);
+      showToast('No se pudo actualizar el permiso de notificaciones.');
+    } finally { button.disabled = false; }
+  });
 }
 
 async function loadLeaderboard() {
@@ -963,6 +1035,7 @@ async function handleGoogleCredentialResponse(response) {
 function activateUser(user) {
   currentUser = user;
   document.querySelector('#add-resource-button').hidden = currentUser.role !== 'moderator';
+  syncPushIdentity();
   if (resources.length) renderResources();
   document.querySelector('#google-signin-button').hidden = true;
   document.querySelector('#auth-config-notice').hidden = true;
@@ -999,9 +1072,11 @@ async function restoreSession() {
 }
 
 function signOut() {
+  if (ONESIGNAL_APP_ID) window.OneSignalDeferred.push(async OneSignal => { try { await OneSignal.logout(); } catch (error) { console.warn('OneSignal logout failed', error); } });
   idToken = null; currentUser = null;
   clearStoredToken();
   document.querySelector('#add-resource-button').hidden = true;
+  document.querySelector('#push-notifications-button').hidden = true;
   if (resources.length) renderResources();
   document.querySelector('#account-box').hidden = true;
   document.querySelector('#google-signin-button').hidden = false;
@@ -1134,6 +1209,7 @@ async function reviewRun(runId, status, button) {
 render();
 switchView(location.hash === '#rules' ? 'rules' : location.hash === '#leaderboard' ? 'leaderboard' : location.hash === '#resources' ? 'resources' : 'home');
 loadLeaderboard();
+initializeOneSignal();
 restoreSession();
 document.addEventListener('app-language-change', () => {
   renderGoogleSignInButton();

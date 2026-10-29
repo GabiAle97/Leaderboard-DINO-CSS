@@ -9,7 +9,7 @@ const USERS_SHEET_NAME = 'Usuarios';
 const NOTIFICATIONS_SHEET_NAME = 'Notificaciones';
 const RESOURCES_SHEET_NAME = 'Recursos';
 const RUN_HEADERS = ['ID', 'Fecha de envío', 'Email', 'Jugador', 'Categoría', 'Tiempo', 'Plataforma', 'Fecha de run', 'Video', 'Notas', 'Estado', 'Revisado por', 'Fecha de revisión', 'Nota de revisión'];
-const USER_HEADERS = ['Email', 'Nombre de Google', 'Rol', 'Fecha de registro', 'Nickname', 'Foto de perfil', 'Twitch'];
+const USER_HEADERS = ['Email', 'Nombre de Google', 'Rol', 'Fecha de registro', 'Nickname', 'Foto de perfil', 'Twitch', 'OneSignal ID'];
 const NOTIFICATION_HEADERS = ['ID', 'Email', 'Run ID', 'Tipo', 'Mensaje', 'Fecha', 'Leída'];
 const RESOURCE_HEADERS = ['ID', 'Nombre', 'Categoría', 'URL', 'Descripción', 'Agregado por', 'Fecha'];
 const RESOURCE_CATEGORIES = ['MOD', 'GUIA', 'REGLAS', 'OTRO'];
@@ -310,11 +310,16 @@ function ensureUser_(spreadsheet, identity) {
   const rows = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0] || '').trim().toLowerCase() === identity.email) {
+      if (!rows[i][7]) {
+        rows[i][7] = Utilities.getUuid();
+        sheet.getRange(i + 1, 8).setValue(rows[i][7]);
+      }
       return userFromRow_(rows[i], identity);
     }
   }
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let pushExternalId = '';
   try {
     // Recheck under lock to avoid duplicate accounts on simultaneous first sign-ins.
     const latest = sheet.getDataRange().getValues();
@@ -323,15 +328,16 @@ function ensureUser_(spreadsheet, identity) {
         return userFromRow_(latest[i], identity);
       }
     }
-    sheet.appendRow([safeSheetText_(identity.email), safeSheetText_(identity.name), 'player', new Date(), '', '', '']);
+    pushExternalId = Utilities.getUuid();
+    sheet.appendRow([safeSheetText_(identity.email), safeSheetText_(identity.name), 'player', new Date(), '', '', '', pushExternalId]);
   } finally {
     lock.releaseLock();
   }
-  return { email: identity.email, name: identity.name, role: 'player', nickname: '', avatarUrl: '', needsSetup: true };
+  return { email: identity.email, name: identity.name, role: 'player', nickname: '', avatarUrl: '', pushExternalId: pushExternalId, needsSetup: true };
 }
 
 function publicUser_(user) {
-  return { name: user.nickname || user.name, nickname: user.nickname, avatarUrl: user.avatarUrl, twitchLogin: user.twitchLogin || '', role: user.role, needsSetup: user.needsSetup };
+  return { name: user.nickname || user.name, nickname: user.nickname, avatarUrl: user.avatarUrl, twitchLogin: user.twitchLogin || '', pushExternalId: user.pushExternalId || '', role: user.role, needsSetup: user.needsSetup };
 }
 
 function userFromRow_(row, identity) {
@@ -343,6 +349,7 @@ function userFromRow_(row, identity) {
     nickname: nickname,
     avatarUrl: validHttpsUrl_(row[5]) || identity.picture || '',
     twitchLogin: normalizeTwitchLogin_(row[6] || ''),
+    pushExternalId: String(row[7] || ''),
     needsSetup: !nickname
   };
 }
@@ -472,8 +479,11 @@ function reviewRun_(spreadsheet, identity, payload) {
   const sheet = ensureSheet_(spreadsheet, RUNS_SHEET_NAME, RUN_HEADERS);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let pushEmail = '';
+  let pushCategory = '';
   try {
     const values = sheet.getDataRange().getValues();
+    let found = false;
     for (let i = 1; i < values.length; i++) {
       if (String(values[i][0]) !== runId) continue;
       if (String(values[i][10]) !== 'pending') throw publicError_('Esta run ya fue revisada.');
@@ -488,12 +498,60 @@ function reviewRun_(spreadsheet, identity, payload) {
         decision, 'Tu run ' + String(values[i][3] || '') + ' (' + String(values[i][4] || '') + ') fue ' + outcome + '.' + reason,
         new Date(), false
       ]);
-      return jsonOutput_({ ok: true, status: decision, runId: runId });
+      pushEmail = String(values[i][2] || '').toLowerCase();
+      pushCategory = String(values[i][4] || '');
+      found = true;
+      break;
     }
-    throw publicError_('No se encontró la run indicada.');
+    if (!found) throw publicError_('No se encontró la run indicada.');
   } finally {
     lock.releaseLock();
   }
+  sendRunReviewPush_(pushEmail, decision, pushCategory);
+  return jsonOutput_({ ok: true, status: decision, runId: runId });
+}
+
+function sendRunReviewPush_(email, decision, category) {
+  const properties = PropertiesService.getScriptProperties();
+  const appId = String(properties.getProperty('ONESIGNAL_APP_ID') || '').trim();
+  const apiKey = String(properties.getProperty('ONESIGNAL_API_KEY') || '').trim();
+  if (!appId || !apiKey) return;
+  const externalId = getPushExternalId_(email);
+  if (!externalId) return;
+  const approved = decision === 'approved';
+  try {
+    const response = UrlFetchApp.fetch('https://api.onesignal.com/notifications', {
+      method: 'post', contentType: 'application/json',
+      headers: { Authorization: 'Key ' + apiKey },
+      payload: JSON.stringify({
+        app_id: appId,
+        target_channel: 'push',
+        include_aliases: { external_id: [externalId] },
+        headings: { en: 'Dino Crisis Run Archive', es: 'Dino Crisis Run Archive' },
+        contents: approved
+          ? { en: 'Your ' + category + ' run was approved.', es: 'Tu run de ' + category + ' fue aprobada.' }
+          : { en: 'Your ' + category + ' run was reviewed. Open the site to see the reason.', es: 'Tu run de ' + category + ' fue revisada. Abre el sitio para ver el motivo.' },
+        url: 'https://gabiale97.github.io/dinolb/'
+      }),
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+      console.error('OneSignal push failed (' + response.getResponseCode() + '): ' + response.getContentText().slice(0, 500));
+    }
+  } catch (error) {
+    console.error('OneSignal push request failed: ' + (error && error.stack ? error.stack : error));
+  }
+}
+
+function getPushExternalId_(email) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USERS_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return '';
+  const values = sheet.getDataRange().getDisplayValues();
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0] || '').trim().toLowerCase() === normalizedEmail) return String(values[i][7] || '').trim();
+  }
+  return '';
 }
 
 function getNotifications_(spreadsheet, email) {

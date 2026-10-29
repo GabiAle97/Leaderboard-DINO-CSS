@@ -20,6 +20,20 @@ En el primer inicio de sesión, cada usuario debe elegir un nickname único (3�
 
 Las runs usan el nickname y la foto del perfil autenticado; no aceptan un nombre enviado desde el formulario. La sesión se conserva en `sessionStorage` y se revalida contra Apps Script tras recargar la página. Dura hasta que venza el ID token de Google (normalmente alrededor de una hora) o se cierre la pestaña/sesión. Al aprobar o rechazar una run, Apps Script escribe una notificación en `Notificaciones`; los rechazos requieren motivo.
 
+## Notificaciones push (OneSignal)
+
+La integración web usa OneSignal Web SDK v16 y está desactivada hasta configurar el App ID. El worker se publica en `https://gabiale97.github.io/dinolb/OneSignalSDKWorker.js`, con alcance `/dinolb/` para funcionar desde GitHub Pages de proyecto. El usuario debe iniciar sesión, pulsar **Activar push** y aceptar el permiso del navegador. La suscripción se vincula a un UUID aleatorio guardado en la columna `OneSignal ID` de `Usuarios`; no se envía el correo a OneSignal. Al aprobar o rechazar una run se intenta enviar un push dirigido a ese usuario. La notificación interna de Sheets sigue funcionando si OneSignal no está configurado o falla.
+
+Para habilitarlo:
+
+1. Crea una aplicación **Web Push** en OneSignal para `https://gabiale97.github.io/dinolb/` y selecciona integración **Custom Code**. Copia el App ID público.
+2. Pon el App ID en `oneSignalAppId` de `config.js`. No pongas la REST API Key en el frontend.
+3. En Apps Script, abre **Configuración del proyecto → Propiedades del script** y crea `ONESIGNAL_APP_ID` con el mismo ID y `ONESIGNAL_API_KEY` con la REST API Key privada de OneSignal.
+4. Publica el repo actualizado en GitHub Pages y verifica que el worker abra directamente sin redirecciones ni 404. Vuelve a desplegar `apps-script/Code.gs` como aplicación web.
+5. Prueba en un navegador normal (no incógnito), inicia sesión, activa push en cada dispositivo y revisa **Audience → Subscriptions** en OneSignal. Al revisar una run de prueba, el push debe llegar solo a los dispositivos suscritos de esa cuenta.
+
+El SDK requiere HTTPS. En iPhone/iPad se necesita además iOS 16.4 o posterior y añadir el sitio a la pantalla de inicio; esta configuración inicial aún no incluye el manifiesto/icono específico de iOS.
+
 ## Recursos
 
 La pestaña **Recursos** lee el catálogo de la hoja `Recursos`. Los visitantes pueden consultarlo y filtrarlo por categoría; los perfiles con rol `moderator` pueden agregar elementos desde el sitio. Mod y herramientas requiere un enlace HTTPS y una descripción breve. Guías, Reglas y verificación y Otros admiten contenido Markdown (hasta 10.000 caracteres), con vista previa y enlace HTTPS opcional. Se admiten títulos, listas, tablas, citas, código, negrita, cursiva y enlaces HTTP/HTTPS; el HTML no se interpreta. Apps Script valida el rol y el contenido antes de escribir. La hoja y sus encabezados se crean automáticamente al agregar el primer recurso.
