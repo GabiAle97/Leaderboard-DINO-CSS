@@ -8,12 +8,14 @@ const RUNS_SHEET_NAME = 'Dino Crisis Runs';
 const USERS_SHEET_NAME = 'Usuarios';
 const NOTIFICATIONS_SHEET_NAME = 'Notificaciones';
 const RESOURCES_SHEET_NAME = 'Recursos';
-const RUN_HEADERS = ['ID', 'Fecha de envío', 'Email', 'Jugador', 'Categoría', 'Tiempo', 'Plataforma', 'Fecha de run', 'Video', 'Notas', 'Estado', 'Revisado por', 'Fecha de revisión', 'Nota de revisión'];
+const RUN_HEADERS = ['ID', 'Fecha de envío', 'Email', 'Jugador', 'Categoría', 'Tiempo', 'Plataforma', 'Fecha de run', 'Video', 'Notas', 'Estado', 'Revisado por', 'Fecha de revisión', 'Nota de revisión', 'Juego'];
 const USER_HEADERS = ['Email', 'Nombre de Google', 'Rol', 'Fecha de registro', 'Nickname', 'Foto de perfil', 'Twitch', 'OneSignal ID'];
 const NOTIFICATION_HEADERS = ['ID', 'Email', 'Run ID', 'Tipo', 'Mensaje', 'Fecha', 'Leída'];
 const RESOURCE_HEADERS = ['ID', 'Nombre', 'Categoría', 'URL', 'Descripción', 'Agregado por', 'Fecha'];
 const RESOURCE_CATEGORIES = ['MOD', 'GUIA', 'REGLAS', 'OTRO'];
 const RUN_CATEGORIES = ['ANY%', 'BEST ENDING', 'SEGMENTED%'];
+const DEFAULT_RUN_GAME = 'DINO CRISIS CUTSCENE SKIP MOD';
+const RUN_GAMES = [DEFAULT_RUN_GAME, 'DINO CRISIS MODERN EDITION'];
 const MAX_RESOURCE_MARKDOWN_LENGTH = 10000;
 
 function doGet(e) {
@@ -36,7 +38,7 @@ function doGet(e) {
         return {
           id: run.id, player: nickname, nickname: nickname,
           avatarUrl: profile && profile.avatarUrl || '',
-          category: run.category, time: run.time, platform: run.platform, date: run.date, video: run.video
+          game: run.game, category: run.category, time: run.time, platform: run.platform, date: run.date, video: run.video
         };
       });
     return jsonOutput_({ runs: publicRuns });
@@ -436,6 +438,7 @@ function requireModerator_(user) {
 
 function submitRun_(spreadsheet, identity, user, payload) {
   const player = cleanText_(user.nickname, 20);
+  const game = String(payload.game || DEFAULT_RUN_GAME).trim().toUpperCase();
   const category = String(payload.category || '').trim().toUpperCase();
   const rawTime = String(payload.time || '').trim();
   const timePattern = /^(?:(\d{1,2}):)?([0-5]?\d):([0-5]\d)$/;
@@ -444,7 +447,7 @@ function submitRun_(spreadsheet, identity, user, payload) {
   const video = validHttpsUrl_(payload.video);
   const notes = cleanText_(payload.notes, 300);
 
-  if (!player || user.needsSetup || RUN_CATEGORIES.indexOf(category) === -1 || !timeMatch || !isValidRunDate_(runDate) || !video) {
+  if (!player || user.needsSetup || RUN_GAMES.indexOf(game) === -1 || RUN_CATEGORIES.indexOf(category) === -1 || !timeMatch || !isValidRunDate_(runDate) || !video) {
     throw publicError_('Revisa los campos obligatorios de la run.');
   }
   const time = [timeMatch[1] || '0', timeMatch[2], timeMatch[3]]
@@ -453,7 +456,7 @@ function submitRun_(spreadsheet, identity, user, payload) {
   const rateKey = 'run-submit:' + Utilities.base64EncodeWebSafe(identity.email);
   if (cache.get(rateKey)) throw publicError_('Espera unos segundos antes de enviar otra run.');
 
-  const sheet = ensureSheet_(spreadsheet, RUNS_SHEET_NAME, RUN_HEADERS);
+  const sheet = ensureRunSheet_(spreadsheet);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   let submittedRun;
@@ -461,10 +464,10 @@ function submitRun_(spreadsheet, identity, user, payload) {
     const id = Utilities.getUuid();
     sheet.appendRow([
       id, new Date(), safeSheetText_(identity.email), safeSheetText_(player), category, time,
-      'PC', runDate, video, safeSheetText_(notes), 'pending', '', '', ''
+      'PC', runDate, video, safeSheetText_(notes), 'pending', '', '', '', game
     ]);
     cache.put(rateKey, '1', 15);
-    submittedRun = { id: id, player: player, category: category, time: time, platform: 'PC', date: runDate, video: video, status: 'pending' };
+    submittedRun = { id: id, player: player, game: game, category: category, time: time, platform: 'PC', date: runDate, video: video, status: 'pending' };
   } finally {
     lock.releaseLock();
   }
@@ -485,7 +488,7 @@ function notifyModeratorsOfPendingRun_(spreadsheet, run) {
   if (!moderators.length) return;
 
   const notificationSheet = ensureSheet_(spreadsheet, NOTIFICATIONS_SHEET_NAME, NOTIFICATION_HEADERS);
-  const message = 'Nueva run pendiente de ' + run.player + ' (' + run.category + ', ' + run.time + ').';
+  const message = 'Nueva run pendiente de ' + run.player + ' (' + run.game + ', ' + run.category + ', ' + run.time + ').';
   const now = new Date();
   moderators.forEach(moderator => notificationSheet.appendRow([
     Utilities.getUuid(), safeSheetText_(moderator.email), run.id, 'pending', message, now, false
@@ -508,8 +511,8 @@ function sendPendingRunPush_(externalIds, run) {
         include_aliases: { external_id: externalIds },
         headings: { en: 'Run waiting for review', es: 'Run pendiente de revisión' },
         contents: {
-          en: run.player + ' submitted ' + run.category + ' (' + run.time + ').',
-          es: run.player + ' envió ' + run.category + ' (' + run.time + ').'
+          en: run.player + ' submitted ' + run.game + ' ' + run.category + ' (' + run.time + ').',
+          es: run.player + ' envió ' + run.game + ' ' + run.category + ' (' + run.time + ').'
         },
         url: 'https://gabiale97.github.io/dinolb/#leaderboard'
       }),
@@ -530,7 +533,7 @@ function reviewRun_(spreadsheet, identity, payload) {
   if (!runId || ['approved', 'rejected'].indexOf(decision) === -1) throw publicError_('La decisión de moderación no es válida.');
   if (decision === 'rejected' && !reviewNote) throw publicError_('Indica el motivo del rechazo para poder notificar al jugador.');
 
-  const sheet = ensureSheet_(spreadsheet, RUNS_SHEET_NAME, RUN_HEADERS);
+  const sheet = ensureRunSheet_(spreadsheet);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   let pushEmail = '';
@@ -714,7 +717,8 @@ function getRuns_(spreadsheet) {
   return values.slice(1).filter(row => row[0]).map(row => ({
     id: row[0], submittedAt: row[1], email: String(row[2] || '').toLowerCase(), player: row[3],
     category: row[4], time: row[5], platform: row[6] || 'PC', date: row[7], video: row[8],
-    notes: row[9], status: row[10], reviewedBy: row[11], reviewedAt: row[12], reviewNote: row[13]
+    notes: row[9], status: row[10], reviewedBy: row[11], reviewedAt: row[12], reviewNote: row[13],
+    game: row[14] || DEFAULT_RUN_GAME
   }));
 }
 
@@ -746,7 +750,7 @@ function getPublicProfile_(spreadsheet, nickname) {
   const runs = getRuns_(spreadsheet)
     .filter(run => run.email === email && run.status === 'approved')
     .map(run => ({
-      category: run.category, time: run.time, date: run.date, video: run.video
+      game: run.game, category: run.category, time: run.time, date: run.date, video: run.video
     }));
   return {
     nickname: profile.nickname,
@@ -762,6 +766,14 @@ function ensureSheet_(spreadsheet, name, headers) {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(headers);
     sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function ensureRunSheet_(spreadsheet) {
+  const sheet = ensureSheet_(spreadsheet, RUNS_SHEET_NAME, RUN_HEADERS);
+  if (sheet.getRange(1, RUN_HEADERS.length).getValue() !== 'Juego') {
+    sheet.getRange(1, RUN_HEADERS.length).setValue('Juego');
   }
   return sheet;
 }

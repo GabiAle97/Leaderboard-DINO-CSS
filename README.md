@@ -1,12 +1,12 @@
 # Dino Crisis Run Archive
 
-Prototipo web responsive para registrar y explorar runs de **Dino Crisis Cutscene Skip Mod** en estas categorías: ANY%, BEST ENDING y SEGMENTED%.
+Prototipo web responsive para registrar y explorar runs de **Dino Crisis Cutscene Skip Mod** y **Dino Crisis Modern Edition** en estas categorías: ANY%, BEST ENDING y SEGMENTED%. Cada juego tiene un leaderboard separado.
 
 ## Ejecutar
 
 Sirve la carpeta desde un origen HTTP/HTTPS local o publicado; el inicio de sesión de Google no funciona desde `file://`. No requiere dependencias de npm. Las submissions se guardan en Google Sheets cuando se configure y despliegue el Apps Script. La plataforma aceptada es exclusivamente PC.
 
-La interfaz está disponible en español e inglés. El idioma inicial se detecta desde las preferencias del navegador; se puede cambiar con el selector `ES / EN` del encabezado y la elección queda guardada en el navegador.
+La interfaz está disponible en español e inglés. El idioma inicial se detecta desde las preferencias del navegador; se puede cambiar con el selector `ES / EN` del encabezado y la elección queda guardada en el navegador. Las categorías se comparten entre ambos juegos, pero las tablas y los tiempos se mantienen separados. Las reglas generales de audio, IGT, video, música y pausas aplican a ambos; los requisitos de metadata e inputs sub-35 aplican solo a Cutscene Skip Mod.
 
 ## Leaderboard
 
@@ -14,7 +14,7 @@ El leaderboard no muestra filas ficticias. Al cargar la página, espera las runs
 
 ## Login, submissions y moderación
 
-El proyecto incluye el código fuente extendido del Apps Script en `apps-script/Code.gs` y el cliente web espera las acciones `profile`, `submitRun`, `myRuns`, `pendingRuns`, `reviewRun`, `notifications`, `markNotificationsRead`, `addResource`, `GET?action=leaderboard`, `GET?action=publicProfile&nickname=...`, `GET?action=resources` y `GET?action=twitchLive`. Los perfiles públicos se abren al pulsar el nickname en una run real del leaderboard; muestran foto, canal de Twitch si se configuró y solo las runs aprobadas. La respuesta pública no incluye correo ni datos de moderación. El script valida el ID token de Google en servidor contra su audiencia OAuth; los usuarios nuevos se agregan con rol `player`. Las runs nuevas quedan `pending`; el leaderboard público solo devuelve runs `approved`. Los moderadores se asignan manualmente en la pestaña protegida `Usuarios`, cambiando su rol a `moderator`. Nunca permitas que usuarios públicos editen esa pestaña.
+El proyecto incluye el código fuente extendido del Apps Script en `apps-script/Code.gs` y el cliente web espera las acciones `profile`, `submitRun`, `myRuns`, `pendingRuns`, `reviewRun`, `notifications`, `markNotificationsRead`, `addResource`, `GET?action=leaderboard`, `GET?action=publicProfile&nickname=...`, `GET?action=resources` y `GET?action=twitchLive`. Las submissions guardan el juego junto a la categoría; las filas previas se consideran parte de Dino Crisis Cutscene Skip Mod. Al actualizar una hoja existente, Apps Script agrega la columna `Juego` al final de `Dino Crisis Runs`. Vuelve a desplegar `apps-script/Code.gs` para habilitar submissions del nuevo juego. Los perfiles públicos se abren al pulsar el nickname en una run real del leaderboard; muestran foto, canal de Twitch si se configuró y solo las runs aprobadas. La respuesta pública no incluye correo ni datos de moderación. El script valida el ID token de Google en servidor contra su audiencia OAuth; los usuarios nuevos se agregan con rol `player`. Las runs nuevas quedan `pending`; el leaderboard público solo devuelve runs `approved`. Los moderadores se asignan manualmente en la pestaña protegida `Usuarios`, cambiando su rol a `moderator`. Nunca permitas que usuarios públicos editen esa pestaña.
 
 En el primer inicio de sesión, cada usuario debe elegir un nickname único (3–20 caracteres; letras, números, espacios o guion bajo). Puede subir una foto PNG, JPG o WEBP de hasta 400 KB; la foto se publica en Google Drive para mostrarse junto al perfil y es opcional. También puede guardar su login/URL de Twitch para que su canal aparezca en Home al transmitir, incluso si está en otra categoría. Si no elige foto, se usa la imagen de Google cuando esté disponible. La hoja `Usuarios` conserva las columnas actuales y agrega `Nickname`, `Foto de perfil` y `Twitch`.
 

@@ -5,12 +5,18 @@ const GOOGLE_CLIENT_ID = CONFIG.googleClientId || '';
 const ONESIGNAL_APP_ID = CONFIG.oneSignalAppId || '';
 const SESSION_STORAGE_KEY = 'dino-crisis-google-session-v1';
 const isGoogleConfigured = GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith('REPLACE_WITH_');
+const defaultGame = 'DINO CRISIS CUTSCENE SKIP MOD';
+const gameLabels = {
+  'DINO CRISIS CUTSCENE SKIP MOD': 'CUTSCENE SKIP MOD',
+  'DINO CRISIS MODERN EDITION': 'MODERN EDITION',
+};
 const descriptions = {
   'ANY%': 'Finaliza el juego lo más rápido posible. Cualquier ending.',
   'BEST ENDING': 'Consigue el mejor final disponible, en el menor tiempo posible.',
   'SEGMENTED%': 'Run completada por segmentos. Se registra el tiempo total acumulado.',
 };
 let selectedCategory = 'ANY%';
+let selectedGame = defaultGame;
 let activeView = 'home';
 let searchQuery = '';
 let runs = [];
@@ -56,7 +62,7 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(window.getAppLanguage() === 'en' ? 'en' : 'es', { day: '2-digit', month: 'short', year: 'numeric' }).format(date).replace('.', '').toUpperCase();
 }
 function render() {
-  const filtered = runs.filter(run => run.category === selectedCategory && run.player.toLowerCase().includes(searchQuery));
+  const filtered = runs.filter(run => (run.game || defaultGame) === selectedGame && run.category === selectedCategory && run.player.toLowerCase().includes(searchQuery));
   filtered.sort((a, b) => secondsFromTime(a.time) - secondsFromTime(b.time));
   document.querySelector('#category-description').textContent = descriptions[selectedCategory];
   document.querySelector('#entries-count').textContent = `${String(filtered.length).padStart(2, '0')} ${filtered.length === 1 ? 'RUN' : 'RUNS'}`;
@@ -91,6 +97,14 @@ function render() {
   document.querySelectorAll('.category-tab').forEach(tab => {
     const active = tab.dataset.category === selectedCategory;
     tab.classList.toggle('active', active); tab.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('[data-game]').forEach(tab => {
+    const active = tab.dataset.game === selectedGame;
+    tab.classList.toggle('active', active); tab.setAttribute('aria-selected', String(active));
+  });
+  document.querySelector('#selected-game-label').textContent = gameLabels[selectedGame];
+  document.querySelectorAll('[data-game-scope]').forEach(rule => {
+    rule.hidden = rule.dataset.gameScope !== selectedGame;
   });
 }
 function initials(value) {
@@ -176,7 +190,7 @@ function renderPublicProfile(profile) {
   } else {
     runs.forEach(run => {
       const card = document.createElement('article'); card.className = 'public-profile-run';
-      const category = document.createElement('span'); category.textContent = run.category;
+      const category = document.createElement('span'); category.textContent = `${run.game || defaultGame} · ${run.category}`;
       const time = document.createElement('strong'); time.textContent = run.time;
       const date = document.createElement('time'); date.textContent = formatDate(run.date);
       const video = document.createElement('a'); video.className = 'video-link';
@@ -190,6 +204,7 @@ function renderPublicProfile(profile) {
 }
 function openDialog(category = selectedCategory) {
   if (!idToken || !currentUser || currentUser.needsSetup) { showToast('Completa tu perfil antes de enviar una run'); return; }
+  form.elements.game.value = selectedGame;
   form.elements.category.value = category;
   document.querySelector('#run-submitter-name').textContent = currentUser.nickname;
   error.hidden = true;
@@ -250,6 +265,7 @@ document.querySelectorAll('[data-open-submit]').forEach(button => button.addEven
 document.querySelector('.close-button').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
 document.querySelectorAll('.category-tab').forEach(tab => tab.addEventListener('click', () => { selectedCategory = tab.dataset.category; render(); }));
+document.querySelectorAll('[data-game]').forEach(tab => tab.addEventListener('click', () => { selectedGame = tab.dataset.game; render(); }));
 document.querySelectorAll('[data-view]').forEach(tab => tab.addEventListener('click', () => switchView(tab.dataset.view)));
 document.querySelector('#refresh-twitch').addEventListener('click', () => loadTwitchStreams(true));
 document.querySelectorAll('[data-resource-filter]').forEach(button => button.addEventListener('click', () => {
@@ -304,7 +320,7 @@ form.addEventListener('submit', event => {
   const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   const url = safeVideoUrl(data.video);
   if (url === '#') { error.textContent = 'Introduce un enlace de video válido que empiece con http:// o https://.'; error.hidden = false; form.elements.video.focus(); return; }
-  const submission = { action: 'submitRun', idToken, category: data.category, time, platform: 'PC', date: data.date, video: url, notes: data.notes };
+  const submission = { action: 'submitRun', idToken, game: data.game, category: data.category, time, platform: 'PC', date: data.date, video: url, notes: data.notes };
   submitRun(submission);
 });
 
@@ -383,8 +399,9 @@ async function submitRun(submission) {
   try {
     await apiPost(submission);
     const category = submission.category;
+    const game = submission.game;
     form.reset(); dateField.value = dateField.max; dialog.close();
-    selectedCategory = category; render();
+    selectedGame = game; selectedCategory = category; render();
     showToast('Run enviada y pendiente de verificación');
     if (currentUser && currentUser.role === 'moderator') loadPendingRuns();
     loadLeaderboard();
@@ -1198,7 +1215,7 @@ function renderRunCards(container, list, showOwner) {
   list.forEach(run => {
     const card = document.createElement('article'); card.className = `run-review-card${showOwner ? ' my-run-card' : ''}`;
     const info = document.createElement('div'); info.className = 'run-review-info';
-    const title = document.createElement('strong'); title.textContent = `${run.player} · ${run.category} · ${run.time}`;
+    const title = document.createElement('strong'); title.textContent = `${run.player} · ${run.game || defaultGame} · ${run.category} · ${run.time}`;
     const details = document.createElement('span'); details.textContent = `${run.platform || 'PC'} · ${formatDate(run.date)}${showOwner ? ` · ${run.status}` : ` · ${run.email}`}`;
     const link = document.createElement('a'); link.href = safeVideoUrl(run.video); link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'ABRIR VIDEO ↗'; link.className = 'video-link';
     info.append(title, details, link);

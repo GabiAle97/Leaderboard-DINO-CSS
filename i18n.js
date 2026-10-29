@@ -55,6 +55,9 @@
     'ALERTA DE CONTENCIÓN': 'CONTAINMENT ALERT',
     'ACTIVA': 'ACTIVE',
     'CLASIFICACIÓN DE LA COMUNIDAD': 'COMMUNITY RANKINGS',
+    'JUEGO *': 'GAME *',
+    'Juego': 'Game',
+    'Las reglas 01–05 aplican a ambos juegos. Las reglas 06–07 son específicas de Dino Crisis Cutscene Skip Mod.': 'Rules 01–05 apply to both games. Rules 06–07 are specific to Dino Crisis Cutscene Skip Mod.',
     'Categorías': 'Categories',
     'Buscar jugador...': 'Search players...',
     'Buscar jugador': 'Search players',
@@ -408,8 +411,8 @@
     document.title = language === 'en' ? 'DINO CRISIS // RUN ARCHIVE' : 'DINO CRISIS // ARCHIVO DE RUNS';
     const description = document.querySelector('meta[name="description"]');
     if (description) description.content = language === 'en'
-      ? 'Community leaderboard for the Dino Crisis Cutscene Skip Mod.'
-      : 'Leaderboard comunitario de Dino Crisis Cutscene Skip Mod.';
+      ? 'Community leaderboard for Dino Crisis Cutscene Skip Mod and Dino Crisis Modern Edition.'
+      : 'Leaderboard comunitario de Dino Crisis Cutscene Skip Mod y Dino Crisis Modern Edition.';
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walker.nextNode())) translateNode(node);

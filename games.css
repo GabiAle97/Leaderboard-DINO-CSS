@@ -1,0 +1,5 @@
+.game-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:-12px 0 18px}
+.game-tab{min-height:36px;padding:8px 14px;border:1px solid var(--line);background:var(--panel);color:var(--muted);font:500 10px var(--mono);letter-spacing:1px;cursor:pointer}
+.game-tab.active{border-color:var(--lime);color:var(--lime);background:rgba(192,243,107,.06)}
+.game-tab:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
+@media(max-width:520px){.game-tabs{margin-top:-6px}.game-tab{font-size:9px;padding:8px 10px}}
