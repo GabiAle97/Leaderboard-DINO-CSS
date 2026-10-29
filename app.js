@@ -277,7 +277,7 @@ document.querySelectorAll('[data-resource-filter]').forEach(button => button.add
   });
   renderResources();
 }));
-document.querySelector('#add-resource-button').addEventListener('click', openResourceDialog);
+document.querySelector('#add-resource-button').addEventListener('click', () => openResourceDialog());
 document.querySelector('#refresh-resources').addEventListener('click', loadResources);
 document.querySelector('.resource-close').addEventListener('click', () => document.querySelector('#resource-dialog').close());
 document.querySelector('#resource-dialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
